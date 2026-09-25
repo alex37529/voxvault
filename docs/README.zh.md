@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="../LICENSE"><img alt="许可：Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="版本" src="https://img.shields.io/badge/version-v0.3.0-8A2BE2">
+  <img alt="版本" src="https://img.shields.io/badge/version-v0.1.0-8A2BE2">
   <img alt="平台" src="https://img.shields.io/badge/platform-Windows%20x64-0078D4">
   <img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-3776AB">
   <img alt="界面" src="https://img.shields.io/badge/GUI-PySide6%206.11-2F6FB5">
@@ -100,7 +100,7 @@ python packaging\build.py --clean --onefile
 dist\VoxVault\VoxVault.exe --selftest
 ```
 
-发布流程基于标签：推送 `v0.3.0` 标签后，GitHub Actions 会构建 exe、
+发布流程基于标签：推送 `v0.1.0` 标签后，GitHub Actions 会构建 exe、
 运行测试和 `--selftest`，并把 zip 附到发布页面上
 （见 `.github/workflows/release.yml`）。
 
