@@ -38,10 +38,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[gui,dev]"
       - name: Собрать
-        run: python packaging\build.py --clean --zip
+        # Собираем ровно то, что уходит в релиз (onefile, один exe),
+        # иначе CI проверял бы другой артефакт, а ломалась бы публикация.
+        run: python packaging\build.py --clean --onefile --zip
       - name: Диагностика сборки
         run: |
-          $p = Start-Process -FilePath dist\VoxVault\VoxVault.exe `
+          $p = Start-Process -FilePath dist\VoxVault.exe `
             -ArgumentList "--selftest" -NoNewWindow -Wait -PassThru `
             -RedirectStandardOutput selftest.txt -RedirectStandardError selftest-err.txt
           Get-Content selftest.txt

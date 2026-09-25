@@ -37,6 +37,7 @@ cloud. 30+ recognition languages, 9 interface languages.
 
 Download `VoxVault-<version>-win64.zip` from the **Releases** section of this
 repository on GitHub, unpack it into any folder and run `VoxVault.exe`.
+The archive contains a single executable — there is nothing else to install.
 Python is not required.
 
 On first launch the app asks for the interface language and offers to download a
@@ -62,48 +63,46 @@ Requires Python 3.12 (PyInstaller lags behind new Python releases).
 
 ```powershell
 py -m pip install -e ".[gui,dev]"
+python packaging\build.py --clean --onefile --zip
+```
+
+Result: `dist\VoxVault.exe` and `dist\VoxVault-<version>-win64.zip` — the zip
+holds **exactly one file**, and that is what gets attached to a GitHub Release.
+No `_internal` folder, no DLLs to keep track of.
+
+The release is built with `--onefile`: the program unpacks its own libraries
+into a Windows temporary directory on every launch. Measured startup is ~2.0 s
+versus ~1.0 s for a folder build.
+
+### Folder build instead of a single file
+
+`onedir` is still available — it is faster to start and trips fewer antivirus
+false positives, at the cost of ~1000 files on disk:
+
+```powershell
 python packaging\build.py --clean --zip
 ```
 
-Result: `dist\VoxVault\` (a folder with the exe and DLLs) and
-`dist\VoxVault-<version>-win64.zip` — the zip is the file to attach to a GitHub
-Release.
-
-The build is `onedir`, not `onefile`: starting from a folder is instant, while
-`onefile` unpacks ~55 MB into a temporary directory on every launch and triggers
-antivirus false positives.
-
-### One file instead of a folder
-
-If you need exactly one `.exe` with no `_internal` folder:
-
-```powershell
-python packaging\build.py --clean --onefile
-```
-
-You get `dist\VoxVault.exe` (55 MB) which unpacks itself into
-`%TEMP%\_MEI…` on every launch. It works (verified), but:
-
-| | folder (`onedir`) | single file (`onefile`) |
+| | folder (`onedir`) | single file (`onefile`, used for releases) |
 |---|---|---|
 | startup | ~1.0 s | ~2.0 s |
 | size on disk | 152 MB | 55 MB |
 | extra work at launch | none | unpacks 147 MB to a temp directory |
 | antivirus | rarely triggers | triggers noticeably more often |
 
-For a fast daily start the folder is better. If you need exactly one file to
-download — use `--onefile`, or an installer (see below).
+For a fast daily start the folder build is better, but the published release is
+a single file so that users download and run one thing.
 
 ### Installer instead of a zip
 
-The portable zip needs unpacking and leaves `_internal` next to the exe. If you
-want a familiar "one setup.exe" with a Start Menu shortcut, that is a separate
-task (NSIS/Inno Setup/InstallShield) and it has not been done.
+The release zip already contains a single executable. If you want a familiar
+"one setup.exe" with a Start Menu shortcut, that is a separate task
+(NSIS/Inno Setup/InstallShield) and it has not been done.
 
 Diagnostics for the built application (attach the output if something misbehaves):
 
 ```powershell
-dist\VoxVault\VoxVault.exe --selftest
+dist\VoxVault.exe --selftest
 ```
 
 Releases are published by tag: push `v0.1.0` → GitHub Actions builds the exe,

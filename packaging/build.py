@@ -252,6 +252,30 @@ def make_zip(dist_dir: Path, version: str) -> Path:
     return zip_path
 
 
+def make_onefile_zip(exe: Path, version: str) -> Path:
+    """Zip с ОДНИМ exe — то, что уходит в GitHub Releases.
+
+    В отличие от `make_zip` внутрь кладется ровно один файл, без каталога
+    `_internal` и без прочих DLL: пользователь распаковывает архив и сразу
+    запускает `VoxVault.exe`. Проверяем состав, чтобы в релиз случайно не
+    уехала папка.
+    """
+    zip_path = DIST / f"VoxVault-{version}-win64.zip"
+    if zip_path.exists():
+        zip_path.unlink()
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        zf.write(exe, exe.name)
+    with zipfile.ZipFile(zip_path) as zf:
+        names = zf.namelist()
+    if names != [exe.name]:
+        raise SystemExit(
+            f"Ожидался один файл в архиве, а получилось: {names}"
+        )
+    print(f"\nАрхив для релиза (один exe): {zip_path} "
+          f"({zip_path.stat().st_size / 1024 / 1024:.1f} МБ)")
+    return zip_path
+
+
 def clean() -> None:
     for path in (DIST, BUILD / "work"):
         if path.exists():
@@ -284,7 +308,9 @@ def main() -> int:
     prepare(version)
     run_pyinstaller(onefile=args.onefile)
     if args.onefile:
-        verify_onefile(version)
+        exe = verify_onefile(version)
+        if args.zip:
+            make_onefile_zip(exe, version)
     else:
         dist_dir = verify(version)
         if args.zip:

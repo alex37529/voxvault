@@ -34,7 +34,8 @@
 ## 安装
 
 从本 GitHub 仓库的 **Releases** 部分下载 `VoxVault-<版本号>-win64.zip`，
-解压到任意文件夹并运行 `VoxVault.exe`。无需安装 Python。
+解压到任意文件夹并运行 `VoxVault.exe`。压缩包内只有一个可执行文件，
+不需要再安装任何东西。无需安装 Python。
 
 首次启动时，程序会询问界面语言，并提示下载所选语言的识别模型。
 **模型不包含在发布包中**（每个模型 50 MB–1.8 GB），它们单独下载并保存在程序旁边。
@@ -58,46 +59,44 @@ py -m pytest                      # 运行测试
 
 ```powershell
 py -m pip install -e ".[gui,dev]"
+python packaging\build.py --clean --onefile --zip
+```
+
+产物：`dist\VoxVault.exe` 和 `dist\VoxVault-<版本号>-win64.zip` —— zip 里
+**只有一个文件**，它就是上传到 GitHub Releases 的附件。没有 `_internal` 文件夹，
+也没有一堆散落的 DLL：下载、解压、运行即可。
+
+发布版本使用 `--onefile` 构建：程序每次启动都会把自己的依赖库解压到
+Windows 临时目录。实测启动约 2.0 秒，而文件夹版本约 1.0 秒。
+
+### 用文件夹构建代替单文件
+
+`onedir` 同样可用：启动更快、更少触发杀毒软件，代价是磁盘上会多出
+约 1000 个文件：
+
+```powershell
 python packaging\build.py --clean --zip
 ```
 
-产物：`dist\VoxVault\`（包含 exe 和 DLL 的文件夹）以及
-`dist\VoxVault-<版本号>-win64.zip` —— 这个 zip 就是上传到 GitHub Releases 的文件。
-
-采用 `onedir` 而非 `onefile`：从文件夹启动是瞬时的，而 `onefile` 每次启动都要把
-约 55 MB 解压到临时目录，并且更容易触发杀毒软件误报。
-
-### 只要一个文件，不要文件夹
-
-如果需要单独一个 `.exe`、没有 `_internal` 文件夹：
-
-```powershell
-python packaging\build.py --clean --onefile
-```
-
-得到 `dist\VoxVault.exe`（55 MB），它会在每次启动时自动解压到
-`%TEMP%\_MEI…`。实测可用，但有代价：
-
-| | 文件夹（`onedir`） | 单文件（`onefile`） |
+| | 文件夹（`onedir`） | 单文件（`onefile`，用于发布） |
 |---|---|---|
 | 启动速度 | 约 1.0 秒 | 约 2.0 秒 |
 | 磁盘占用 | 152 MB | 55 MB |
 | 启动时的额外操作 | 无 | 解压 147 MB 到临时目录 |
 | 杀毒软件 | 很少误报 | 明显更容易误报 |
 
-日常频繁使用建议用文件夹。如果必须提供单文件下载，可用 `--onefile`，
-或者改用安装程序（见下文）。
+日常频繁使用建议用文件夹，但发布包只放一个文件，用户下载解压后即可运行。
 
 ### 用安装程序代替 zip
 
-便携版 zip 需要解压，并且会在 exe 旁边留下 `_internal`。如果您需要传统的
-“一个 setup.exe”并带开始菜单快捷方式，那是另一项单独的工作
+发布压缩包内已经只有一个可执行文件。如果您需要传统的“一个 setup.exe”
+并带开始菜单快捷方式，那是另一项单独的工作
 （NSIS / Inno Setup / InstallShield），目前尚未完成。
 
 已构建程序的诊断命令（出问题时把输出附上）：
 
 ```powershell
-dist\VoxVault\VoxVault.exe --selftest
+dist\VoxVault.exe --selftest
 ```
 
 发布流程基于标签：推送 `v0.1.0` 标签后，GitHub Actions 会构建 exe、

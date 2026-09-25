@@ -114,6 +114,54 @@ class TestVersionResource:
             build.app_version()
 
 
+class TestOnefileRelease:
+    """Релиз для GitHub — один exe, без каталога `_internal`.
+
+    Первая публичная сборка (v0.1.0) уехала onedir'ом: в zip попал
+    `_internal` с ~1000 файлов, и пользователю приходилось распаковывать
+    папку. Поэтому состав архива проверяется и в build.py, и в тестах.
+    """
+
+    def test_zip_contains_single_exe(self, tmp_path, monkeypatch):
+        import zipfile
+
+        from dictophone import models as _  # noqa: F401  (проверка импорта)
+
+        build = _load_build_module()
+        exe = tmp_path / "VoxVault.exe"
+        exe.write_bytes(b"MZ fake exe")
+        monkeypatch.setattr(build, "DIST", tmp_path)
+
+        zip_path = build.make_onefile_zip(exe, "9.9.9")
+
+        assert zip_path.name == "VoxVault-9.9.9-win64.zip"
+        with zipfile.ZipFile(zip_path) as archive:
+            names = archive.namelist()
+        assert names == ["VoxVault.exe"], f"в архиве лишнее: {names}"
+        assert not any("_internal" in name for name in names)
+
+    def test_release_workflow_builds_onefile(self):
+        text = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+            encoding="utf-8"
+        )
+        assert "--onefile" in text, "релиз должен собираться одним файлом"
+        assert "VoxVault.exe" in text, "в тексте релиза должен быть адрес exe"
+
+    def test_release_notes_do_not_mention_internal_folder(self):
+        """В описании релиза больше нет инструкции «не удаляйте _internal»."""
+        text = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+            encoding="utf-8"
+        )
+        assert "не удалять" not in text
+        assert "удалять нельзя" not in text
+
+    def test_ci_builds_same_layout_as_release(self):
+        """CI должен проверять тот артефакт, который реально публикуется."""
+        text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        assert "--onefile" in text, "CI собирает не то, что уходит в релиз"
+        assert r"dist\VoxVault.exe" in text, "сельфтест должен запускать один exe"
+
+
 class TestConsoleEncoding:
     """Скрипты сборки печатают по-русски — и должны не падать на CI.
 
