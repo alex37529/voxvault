@@ -42,10 +42,18 @@ jobs:
         run: |
           $zip = Get-ChildItem dist\*.zip | Select-Object -First 1
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $names = [IO.Compression.ZipFile]::OpenRead($zip.FullName).Entries.FullName
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip.FullName)
+          try {
+            # @() обязателен: когда в архиве один файл, .FullName отдаёт
+            # строку, а не массив, и $names[0] вернул бы первый символ ('V')
+            # вместо имени файла — проверка падала бы ложно.
+            $names = @($archive.Entries | ForEach-Object { $_.FullName })
+          } finally {
+            $archive.Dispose()
+          }
           $names | ForEach-Object { Write-Host "  в архиве: $_" }
           if ($names.Count -ne 1) { throw "в архиве $($names.Count) файлов, ожидался один" }
-          if ($names[0] -ne "VoxVault.exe") { throw "в архиве не VoxVault.exe" }
+          if ($names[0] -ne "VoxVault.exe") { throw "ожидался VoxVault.exe, а в архиве $($names[0])" }
 
       - name: Отчёт о размере
         run: |

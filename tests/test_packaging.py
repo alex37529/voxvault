@@ -147,6 +147,16 @@ class TestOnefileRelease:
         assert "--onefile" in text, "релиз должен собираться одним файлом"
         assert "VoxVault.exe" in text, "в тексте релиза должен быть адрес exe"
 
+    def test_archive_check_casts_to_array(self):
+        """Ловушка PowerShell: один файл → .FullName отдаёт строку, и $names[0]
+        становится первым символом ('V'), а не именем файла. Проверка архива
+        падала ложно, пока не появилось `@(...)`."""
+        text = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+            encoding="utf-8"
+        )
+        assert "@($archive.Entries" in text, "нет приведения к массиву в проверке архива"
+        assert "$names[0]" in text, "проверка имени файла пропала"
+
     def test_release_notes_do_not_mention_internal_folder(self):
         """В описании релиза больше нет инструкции «не удаляйте _internal»."""
         text = (ROOT / ".github" / "workflows" / "release.yml").read_text(
