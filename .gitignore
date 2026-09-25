@@ -1,0 +1,52 @@
+# Модели VOSK — тяжёлые бинарники (1.8 ГБ), качаются приложением
+/models/
+
+# Виртуальное окружение
+/venv/
+/.env
+.env
+
+# Результаты работы
+/out_text/
+/out_test/
+
+# Артефакты сборки и кэши
+__pycache__/
+*.py[cod]
+*.egg-info/
+/build/
+/dist/
+/packaging/build/
+/packaging/assets/*.ico
+.pytest_cache/
+
+# Черновые заметки и тестовые фразы (локально, в репозиторий не нужны)
+docs/notes*.txt
+
+# Служебные заметки для ИИ-агента: полезны локально, но не для пользователей
+# репозитория, поэтому в коммит не попадает.
+/AGENT.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Инструменты и локальные отчёты
+/.codebase-memory/
+/.playwright-mcp/
+/docs/_*.html
+
+# Временные файлы проверок и логов
+build-log.txt
+selftest*.txt
+exe*.txt
+gui-*.txt
+g1*.txt
+st-*.txt
+
+# Прочее
+*.log
+Thumbs.db
+.DS_Store
+/test/

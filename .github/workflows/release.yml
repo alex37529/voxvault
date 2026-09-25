@@ -1,0 +1,77 @@
+name: Release
+
+# Релиз собирается по тегу вида v0.3.0. Артефакт: dist/VoxVault-<version>-win64.zip
+# (модели в него не попадают — качаются приложением при первом запуске).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # 3.12: PyInstaller догоняет свежие версии Python с задержкой,
+          # на неподдержанной собирается bootloader, который не запустится.
+          python-version: "3.12"
+
+      - name: Установить зависимости
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[gui,dev]"
+
+      - name: Тесты
+        run: python -m pytest
+
+      - name: Собрать
+        run: python packaging\build.py --clean --zip
+
+      - name: Отчёт о размере
+        run: |
+          Get-ChildItem dist\*.zip | Format-Table Name, @{n="MB";e={[math]::Round($_.Length/1MB,1)}}
+
+      - name: Контрольная сумма
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem dist\*.zip | Select-Object -First 1
+          $hash = Get-FileHash $zip.FullName -Algorithm SHA256
+          "$($hash.Hash)  $($zip.Name)" | Out-File dist\SHA256SUMS.txt -Encoding utf8
+          Get-Content dist\SHA256SUMS.txt
+
+      - name: Приложить к релизу
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+          body: |
+            ## VoxVault
+
+            Бесплатное офлайн-распознавание речи: запись с микрофона и
+            транскрибация файлов, без облака и отправки данных в интернет.
+
+            **Установка**
+            1. Распакуйте `VoxVault-<версия>-win64.zip` в любую папку.
+            2. Запустите `VoxVault.exe` — при первом запуске выберите язык и
+               скачайте модель распознавания (модели не входят в сборку).
+            3. Папка должна оставаться на месте: модели и тексты пишутся рядом
+               с программой.
+
+            **Важно:** запускать нужно `VoxVault.exe`, а папку `_internal` рядом
+            с ним удалять нельзя — это библиотеки Python, Qt, Vosk и PortAudio
+            (~147 МБ). Без неё программа не запустится. Переносить exe
+            отдельно от остальных файлов нельзя.
+
+            **Требования:** Windows 10/11 x64. Python не нужен.
+
+            Сумма SHA256 — в файле `SHA256SUMS.txt`.

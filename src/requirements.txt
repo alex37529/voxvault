@@ -1,0 +1,8 @@
+# Зависимости диктофона.
+# Канонический список — в pyproject.toml ([project.dependencies]);
+# этот файл оставлен для удобства: py -m pip install -r src\requirements.txt
+#
+# numpy НЕ нужен: чтение wav идёт через стандартный модуль wave.
+vosk>=0.3.45
+sounddevice>=0.4.6
+requests>=2.31
