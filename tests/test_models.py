@@ -92,6 +92,57 @@ class TestRegistry:
             assert lang in table
 
 
+class TestRegistrySizes:
+    """Размеры, которых нет в реестре, — это «нет», а не «-»."""
+
+    def test_available_sizes_for_both_kinds(self):
+        assert models.available_sizes("ru") == ["small", "large"]
+        assert models.available_sizes("ar") == ["large"]  # только большая
+        assert models.available_sizes("ca") == ["small"]  # только маленькая
+
+    def test_missing_sizes(self):
+        assert models.missing_sizes("ar") == ["small"]
+        assert models.missing_sizes("ca") == ["large"]
+        assert models.missing_sizes("ru") == []
+
+    def test_size_exists(self):
+        assert models.size_exists("ar", "large") is True
+        assert models.size_exists("ar", "small") is False
+        assert models.size_exists("ca", "small") is True
+        assert models.size_exists("ca", "large") is False
+
+    def test_case_insensitive_and_unknown_lang(self):
+        assert models.available_sizes("AR") == ["large"]
+        assert models.available_sizes("xx") == []
+        assert models.size_exists("xx", "small") is False
+
+    def test_every_lang_has_at_least_one_size_in_order(self):
+        for lang in models.known_langs():
+            sizes = models.available_sizes(lang)
+            assert sizes, f"{lang}: ни одного размера"
+            assert sizes == sorted(sizes, key=models.SIZES.index)
+
+    def test_table_says_no_instead_of_dash(self):
+        """Регресс: отсутствующий размер печатался как `small=-`.
+
+        По дефису не отличить «нет такой модели» от «сбой вывода», и
+        интерфейс предлагал скачать то, чего не существует.
+        """
+        table = models.format_models_table()
+        line = next(row for row in table.splitlines() if row.strip().startswith("ar"))
+        assert "small = нет в реестре" in line
+        assert "large = vosk-model-ar-mgb2-0.4" in line
+        assert "=-" not in table
+        assert "= -" not in table
+
+    def test_table_shows_archive_names(self):
+        table = models.format_models_table()
+        for sizes in models.MODELS.values():
+            for name in sizes.values():
+                if name:
+                    assert name in table, f"{name} не показан в таблице"
+
+
 class TestFindModel:
     def test_by_lang_prefers_large(self, fake_model_dir):
         found = models.find_model(fake_model_dir, "ru")

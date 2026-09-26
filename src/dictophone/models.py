@@ -106,6 +106,32 @@ class DownloadCancelled(Exception):
 # Реестр
 # ---------------------------------------------------------------------------
 
+#: Порядок размеров везде в интерфейсе: маленькая, потом большая.
+SIZES = ("small", "large")
+
+
+def available_sizes(lang: str) -> list[str]:
+    """Какие размеры реально существуют у языка в официальном реестре VOSK.
+
+    У части языков есть только один размер (`ar` — лишь большая, `ca` — лишь
+    маленькая). Раньше интерфейс и CLI показывали такой размер как обычный,
+    и кнопка «Скачать (small)» предлагала то, чего не существует. Ответ на
+    вопрос «а бывает ли?» должен быть один — здесь.
+    """
+    entry = MODELS.get((lang or "").lower()) or {}
+    return [size for size in SIZES if entry.get(size)]
+
+
+def size_exists(lang: str, size: str) -> bool:
+    """Существует ли в реестре связка язык + размер."""
+    return size in available_sizes(lang)
+
+
+def missing_sizes(lang: str) -> list[str]:
+    """Размеры, которых у языка нет (в порядке SIZES)."""
+    have = set(available_sizes(lang))
+    return [size for size in SIZES if size not in have]
+
 
 def known_langs() -> list[str]:
     """Отсортированный список установленных языков реестра."""
@@ -141,12 +167,23 @@ def model_url(lang: str, size: str = "small") -> str:
 
 
 def format_models_table() -> str:
-    """Готовый для вывода табличный список моделей (для `list`)."""
+    """Готовый для вывода табличный список моделей (для `list`).
+
+    Несуществующий размер помечается словами, а не дефисом: по дефису
+    непонятно, это «нет модели» или «сбой вывода». Слова, к сожалению, только
+    русские — вывод CLI вообще не переводится.
+    """
     lines = ["Языки и модели (имя архива VOSK):"]
     for lang in known_langs():
-        small = MODELS[lang].get("small") or "-"
-        large = MODELS[lang].get("large") or "-"
-        lines.append(f"  {lang:6s}  small={small:42s}  large={large}")
+        cells = []
+        for size in SIZES:
+            name = MODELS[lang].get(size)
+            cells.append(f"{size:<5} = {name}" if name else f"{size:<5} = нет в реестре")
+        lines.append(f"  {lang:<7} " + "   ".join(cells))
+    only = [lang for lang in known_langs() if len(available_sizes(lang)) == 1]
+    if only:
+        lines.append("")
+        lines.append("Только один размер: " + ", ".join(only))
     first = known_langs()[0] if known_langs() else "ru"
     lines.append(f"\nУстановить: py main.py download --lang {first} [--size small|large]")
     return "\n".join(lines)

@@ -207,13 +207,46 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _retranslate_models(self) -> None:
         """Подписи кнопок вкладки «Модели»."""
-        self.btn_dl_small.setText(self._t("models.download") + " (small)")
-        self.btn_dl_large.setText(self._t("models.download") + " (large)")
         self.btn_dl_cancel.setText(self._t("models.cancel"))
         self.btn_del.setText(self._t("models.delete"))
         if hasattr(self, "btn_warm"):
             self.btn_warm.setText(self._t("settings.warm_button"))
             self.warm_hint_label.setText(self._t("settings.warm_hint"))
+        # подписи кнопок «Скачать» зависят от выбранного языка
+        if hasattr(self, "models_list") and self.models_list.currentRow() >= 0:
+            self._on_model_picked()
+
+    def _download_button(self, size: str) -> QtWidgets.QPushButton:
+        return self.btn_dl_small if size == "small" else self.btn_dl_large
+
+    def _update_download_buttons(self, data: dict) -> None:
+        """Показать кнопку «Скачать» только там, где модель существует.
+
+        Раньше обе кнопки всегда оставались на месте, просто гасились, если
+        модель уже установлена. Из-за этого у `ar` (есть только большая)
+        светилась «Скачать (small)» — то есть кнопка предлагала скачать
+        модель, которой в реестре VOSK нет. В подписи добавляем имя
+        архива: по нему видно, что именно будет скачано.
+        """
+        lang = data["lang"]
+        for size in models.SIZES:
+            button = self._download_button(size)
+            name = models.MODELS.get(lang, {}).get(size)
+            if not name:
+                button.hide()  # такого размера у языка не бывает
+                continue
+            button.show()
+            if data[size]:
+                size_mb = (
+                    models.dir_size_mb(self._model_dir() / data[size])
+                    if size == "small"
+                    else data["size_mb"]
+                )
+                button.setText(f"{self._t('models.installed')} · {name} · {size_mb} МБ")
+                button.setEnabled(False)
+            else:
+                button.setText(f"{self._t('models.download')} · {name}")
+                button.setEnabled(True)
 
     def _fill_models(self) -> None:
         """Список: сначала установленные, потом доступные к скачиванию."""
@@ -223,12 +256,12 @@ class SettingsDialog(QtWidgets.QDialog):
         installed = [r for r in rows if r["path"] is not None]
         missing = [r for r in rows if r["path"] is None]
         for r in installed:
-            kinds = [s for s in ("small", "large") if r[s]]
+            kinds = [s for s in models.SIZES if r[s]]
             self.models_list.addItem(
                 f"✓ {r['lang']:<7} {'+'.join(kinds):<12} {r['size_mb']:>5} МБ"
             )
         for r in missing:
-            avail = [s for s in ("small", "large") if models.MODELS[r["lang"]].get(s)]
+            avail = models.available_sizes(r["lang"])
             self.models_list.addItem(f"  {r['lang']:<7} {','.join(avail)}")
         self.models_list.blockSignals(False)
         if self.models_list.count():
@@ -259,14 +292,21 @@ class SettingsDialog(QtWidgets.QDialog):
             )
         if data["large"]:
             parts.append(f"{self._t('models.have_large')} ({data['size_mb']} МБ)")
+        # Чего нет, говорим словами: у части языков в реестре VOSK только один
+        # размер, и молчаливый «-» читался как «ещё не скачано».
+        for size in models.missing_sizes(data["lang"]):
+            parts.append(f"{size} — {self._t('models.not_in_registry')}")
         self.model_info.setText(
             " · ".join(parts) if parts else self._t("models.have_none")
         )
-        self.btn_dl_small.setEnabled(not data["small"])
-        self.btn_dl_large.setEnabled(not data["large"])
+        self._update_download_buttons(data)
         self.btn_del.setEnabled(data["path"] is not None)
         self.model_warn.setText(self._t("models.warn_large"))
-        self.model_warn.setVisible(data["large"] is None)
+        # предупреждение о размере большой модели нужно только там, где она
+        # существует и ещё не установлена
+        self.model_warn.setVisible(
+            bool(models.MODELS[data["lang"]].get("large")) and data["large"] is None
+        )
 
     def _on_warm_clicked(self) -> None:
         if self._on_warm is not None:
@@ -291,11 +331,14 @@ class SettingsDialog(QtWidgets.QDialog):
         if data is None or size not in ("small", "large"):
             return
         lang = data["lang"]
-        if models.MODELS[lang].get(size) is None:
+        if not models.size_exists(lang, size):
+            # кнопки для несуществующих размеров скрыты, но подстраховаться
+            # не помешает: сообщение говорит «нет», а не «уже установлено»
             QtWidgets.QMessageBox.information(
                 self,
                 self._t("tab.models"),
-                f"{lang}: {self._t('models.have_none')} ({size})",
+                f"{lang}: {self._t('label.model_size')} {size} — "
+                f"{self._t('models.not_in_registry')}",
             )
             return
         need_mb = models.archive_size_mb(lang, size) or (1800 if size == "large" else 60)

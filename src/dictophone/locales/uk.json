@@ -99,6 +99,7 @@
   "models.close_while_downloading": "Дочекайтеся завершення завантаження або натисніть «Скасувати».",
   "models.installed": "Встановлено",
   "models.not_installed": "не встановлено",
+  "models.not_in_registry": "немає в реєстрі VOSK",
   "models.tab_hint": "Виберіть мову та натисніть «Завантажити».",
   "models.download": "Завантажити",
   "models.delete": "Видалити",

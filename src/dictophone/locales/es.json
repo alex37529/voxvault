@@ -99,6 +99,7 @@
   "models.close_while_downloading": "Espere a que termine la descarga o pulse Cancelar.",
   "models.installed": "Instalado",
   "models.not_installed": "no instalado",
+  "models.not_in_registry": "no está en el registro de VOSK",
   "models.tab_hint": "Seleccione un idioma y pulse Descargar.",
   "models.download": "Descargar",
   "models.delete": "Eliminar",

@@ -461,6 +461,155 @@ class TestAboutVersion:
             win.close()
 
 
+class TestRegistrySizesInUi:
+    """Размеры, которых нет в реестре VOSK, не предлагаются в интерфейсе.
+
+    Регресс: у `ar` (есть только большая модель) светилась кнопка
+    «Скачать (small)», а в главном окне в списке размера стояли оба
+    варианта — выбрать несуществующий размер можно было, и приложение
+    предлагало скачать то, чего не существует.
+    """
+
+    def _win(self, app, tmp_path, monkeypatch, **kw):
+        monkeypatch.setattr(
+            config_mod, "default_config_path", lambda: tmp_path / "config.json"
+        )
+        defaults = {
+            "first_run": False,
+            "ui_lang": "ru",
+            "lang": "ru",
+            "size": "auto",
+            "model_dir": str(tmp_path),
+        }
+        win = gui_qt.MainWindow(config_mod.Config(**{**defaults, **kw}))
+        win._warm_task = None
+        return win
+
+    @staticmethod
+    def _sizes(win) -> list:
+        return [win.size_box.itemData(i) for i in range(win.size_box.count())]
+
+    def _pick_lang(self, win, code: str) -> None:
+        index = win.lang_box.findData(code)
+        assert index >= 0, f"языка {code} нет в списке"
+        win.lang_box.setCurrentIndex(index)
+
+    def test_size_box_lists_auto_and_existing_sizes(self, app, tmp_path, monkeypatch):
+        win = self._win(app, tmp_path, monkeypatch)
+        try:
+            assert self._sizes(win) == ["auto", "small", "large"]  # ru
+            self._pick_lang(win, "ar")
+            assert self._sizes(win) == ["auto", "large"]
+            self._pick_lang(win, "ca")
+            assert self._sizes(win) == ["auto", "small"]
+        finally:
+            win._model = None
+            win.close()
+
+    def test_size_labels_translated(self, app, tmp_path, monkeypatch):
+        win = self._win(app, tmp_path, monkeypatch)
+        try:
+            self._pick_lang(win, "ar")
+            texts = [win.size_box.itemText(i) for i in range(win.size_box.count())]
+            assert win.t("size.auto") in texts
+            assert win.t("size.large") in texts
+        finally:
+            win._model = None
+            win.close()
+
+    def test_impossible_size_falls_back_to_auto(self, app, tmp_path, monkeypatch):
+        """Выбрали large, перешли на язык без large — остаётся «авто»."""
+        win = self._win(app, tmp_path, monkeypatch, size="large")
+        try:
+            assert win._selected_size() == "large"
+            self._pick_lang(win, "ca")
+            assert win._selected_size() is None
+            assert win.cfg.size == "auto"
+        finally:
+            win._model = None
+            win.close()
+
+    def test_switching_language_saves_existing_size(self, app, tmp_path, monkeypatch):
+        win = self._win(app, tmp_path, monkeypatch, size="small")
+        try:
+            self._pick_lang(win, "uk")  # у uk есть оба размера
+            assert win.cfg.size == "small"
+            assert win._selected_size() == "small"
+            self._pick_lang(win, "el-gr")  # а у el-gr только большая
+            assert win._selected_size() is None
+            assert win.cfg.size == "auto"
+        finally:
+            win._model = None
+            win.close()
+
+
+class TestModelsTabHonesty:
+    """Вкладка «Модели»: кнопка есть только там, где есть что качать."""
+
+    def _dlg(self, app, widget, tmp_path):
+        cfg = config_mod.Config(model_dir=str(tmp_path), ui_lang="ru")
+        return qt_settings.SettingsDialog(cfg, I18n("ru").t, widget)
+
+    @staticmethod
+    def _row_of(dlg, lang: str) -> int:
+        for row in range(dlg.models_list.count()):
+            if lang in dlg.models_list.item(row).text():
+                return row
+        raise AssertionError(f"языка {lang} нет в списке")
+
+    @staticmethod
+    def _install(tmp_path, lang: str, size: str) -> None:
+        name = models.MODELS[lang][size]
+        (tmp_path / name / "am").mkdir(parents=True, exist_ok=True)
+        (tmp_path / name / "am" / "final.mdl").write_bytes(b"x")
+
+    def test_button_hidden_for_size_absent_in_registry(self, app, widget, tmp_path):
+        dlg = self._dlg(app, widget, tmp_path)
+        try:
+            dlg.models_list.setCurrentRow(self._row_of(dlg, "ar"))
+            # у ar нет small -> кнопки быть не должно вовсе
+            assert dlg.btn_dl_small.isHidden() is True
+            assert dlg.btn_dl_large.isHidden() is False
+            # и в подписи это сказано словами
+            assert I18n("ru").t("models.not_in_registry") in dlg.model_info.text()
+        finally:
+            dlg.close()
+
+    def test_button_label_shows_archive_name(self, app, widget, tmp_path):
+        dlg = self._dlg(app, widget, tmp_path)
+        try:
+            dlg.models_list.setCurrentRow(self._row_of(dlg, "cn"))
+            text = dlg.btn_dl_large.text()
+            assert models.MODELS["cn"]["large"] in text, text
+            assert dlg.btn_dl_large.isEnabled() is True
+            dlg.models_list.setCurrentRow(self._row_of(dlg, "ca"))
+            assert dlg.btn_dl_large.isHidden() is True
+            assert models.MODELS["ca"]["small"] in dlg.btn_dl_small.text()
+        finally:
+            dlg.close()
+
+    def test_installed_model_is_not_offered_for_download(self, app, widget, tmp_path):
+        self._install(tmp_path, "ru", "small")
+        dlg = self._dlg(app, widget, tmp_path)
+        try:
+            dlg.models_list.setCurrentRow(self._row_of(dlg, "ru"))
+            assert dlg.btn_dl_small.isEnabled() is False
+            assert models.MODELS["ru"]["small"] in dlg.btn_dl_small.text()
+        finally:
+            dlg.close()
+
+    def test_large_warning_only_when_large_exists(self, app, widget, tmp_path):
+        dlg = self._dlg(app, widget, tmp_path)
+        try:
+            dlg.models_list.setCurrentRow(self._row_of(dlg, "ru"))
+            assert dlg.model_warn.isHidden() is False  # large есть, не стоит
+            dlg.models_list.setCurrentRow(self._row_of(dlg, "ca"))
+            # у ca большой модели не существует — предупреждать не о чем
+            assert dlg.model_warn.isHidden() is True
+        finally:
+            dlg.close()
+
+
 class TestHistoryDialog:
     def test_history_dialog_builds(self, app, widget, tmp_path):
         db = storage.Storage(tmp_path / "history.db")

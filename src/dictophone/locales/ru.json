@@ -107,6 +107,7 @@
   "models.close_while_downloading": "Дождитесь окончания скачивания или нажмите «Отменить».",
   "models.installed": "Установлено",
   "models.not_installed": "не установлена",
+  "models.not_in_registry": "нет в реестре VOSK",
   "models.tab_hint": "Выберите язык и нажмите «Скачать».",
   "models.download": "Скачать",
   "models.delete": "Удалить",

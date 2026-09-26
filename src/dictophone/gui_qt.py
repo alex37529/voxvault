@@ -167,9 +167,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.lbl_size = QtWidgets.QLabel()
         self.size_box = QtWidgets.QComboBox()
-        for key in ("auto", "small", "large"):
-            self.size_box.addItem("", key)
-        self.size_box.setCurrentIndex(self.size_box.findData(self.cfg.size))
+        self._fill_sizes()
+        # язык в списке может отличаться от настроек (например, в настройках
+        # стоит язык, которого нет в реестре) — сверяемся с реальным выбором
+        self.cfg.size = self._selected_size() or "auto"
 
         self.lbl_device = QtWidgets.QLabel()
         self.device_box = QtWidgets.QComboBox()
@@ -185,7 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
         lay.addLayout(top)
 
         # смена языка/размера перепрогревает нужную модель
-        self.lang_box.currentIndexChanged.connect(self._on_selection_changed)
+        self.lang_box.currentIndexChanged.connect(self._on_lang_changed)
         self.size_box.currentIndexChanged.connect(self._on_selection_changed)
 
         # индикатор загрузки
@@ -333,7 +334,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lbl_size.setText(self.t("label.model_size"))
         self.lbl_device.setText(self.t("label.microphone"))
         for idx, key in enumerate(("size.auto", "size.small", "size.large")):
-            self.size_box.setItemText(idx, self.t(key))
+            if idx < self.size_box.count():
+                self.size_box.setItemText(idx, self.t(key))
         self.device_box.setItemText(0, self.t("label.default_device"))
 
         self.btn_record.setText(self.t("btn.record"))
@@ -674,6 +676,40 @@ class MainWindow(QtWidgets.QMainWindow):
                 self, self.t("error.title"), self.t("history.open_error", error=str(e))
             )
 
+    def _on_lang_changed(self, *_a) -> None:
+        """Смена языка: пересобрать список размеров под новый язык.
+
+        У части языков в реестре VOSK только один размер (`ar` — лишь
+        большая, `ca` — лишь маленькая). Показывать второй вариант незачем:
+        его всё равно нельзя скачать. Если выбранный раньше размер у нового
+        языка не существует, остаётся «авто» — оно выберет ту модель, что есть.
+        """
+        if self._ui_ready is False:
+            return
+        self._fill_sizes()
+        self._on_selection_changed()
+
+    def _fill_sizes(self) -> None:
+        """Список размеров: «авто» + только те, что есть у выбранного языка."""
+        lang = self.lang_box.currentData() or self.cfg.lang
+        self.size_box.blockSignals(True)
+        self.size_box.clear()
+        self.size_box.addItem("", "auto")
+        for size in models.available_sizes(lang):
+            self.size_box.addItem("", size)
+        index = self.size_box.findData(self.cfg.size)
+        if index < 0:
+            index = 0  # размера у языка нет — остаётся «авто»
+        self.size_box.setCurrentIndex(index)
+        self.size_box.blockSignals(False)
+        self._retranslate_sizes()
+
+    def _retranslate_sizes(self) -> None:
+        """Подписи размеров: список пересобирается при смене языка."""
+        for idx in range(self.size_box.count()):
+            key = self.size_box.itemData(idx)
+            self.size_box.setItemText(idx, self.t(f"size.{key}"))
+
     def _on_selection_changed(self, *_a) -> None:
         """Смена языка или размера -> перепрогреть нужную модель.
 
@@ -683,6 +719,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         if self._ui_ready is False:
             return  # интерфейс ещё собирается
+        self.cfg.size = self._selected_size() or "auto"
         self._model = None
         self._model_lang = None
         self._warm_failed = False

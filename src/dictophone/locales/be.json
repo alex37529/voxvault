@@ -99,6 +99,7 @@
   "models.close_while_downloading": "Дачакайцеся канца спампоўвання або націсніце «Скасаваць».",
   "models.installed": "Усталявана",
   "models.not_installed": "не ўсталявана",
+  "models.not_in_registry": "няма ў рэестры VOSK",
   "models.tab_hint": "Выберыце мову і націсніце «Спампаваць».",
   "models.download": "Спампаваць",
   "models.delete": "Выдаліць",

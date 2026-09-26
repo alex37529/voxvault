@@ -99,6 +99,7 @@
   "models.close_while_downloading": "请等待下载完成，或点击“取消”。",
   "models.installed": "已安装",
   "models.not_installed": "未安装",
+  "models.not_in_registry": "VOSK 注册表中没有",
   "models.tab_hint": "选择语言并点击“下载”。",
   "models.download": "下载",
   "models.delete": "删除",

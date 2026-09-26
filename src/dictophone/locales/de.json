@@ -99,6 +99,7 @@
   "models.close_while_downloading": "Warten Sie das Ende des Downloads ab oder klicken Sie auf Abbrechen.",
   "models.installed": "Installiert",
   "models.not_installed": "nicht installiert",
+  "models.not_in_registry": "nicht im VOSK-Register",
   "models.tab_hint": "Wählen Sie eine Sprache und klicken Sie auf Herunterladen.",
   "models.download": "Herunterladen",
   "models.delete": "Löschen",
