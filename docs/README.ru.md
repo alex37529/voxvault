@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="../LICENSE"><img alt="Лицензия: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="Версия" src="https://img.shields.io/badge/version-v0.1.1-8A2BE2">
+  <img alt="Версия" src="https://img.shields.io/badge/version-v0.1.2-8A2BE2">
   <img alt="Платформа" src="https://img.shields.io/badge/platform-Windows%20x64-0078D4">
   <img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-3776AB">
   <img alt="Интерфейс" src="https://img.shields.io/badge/GUI-PySide6%206.11-2F6FB5">
