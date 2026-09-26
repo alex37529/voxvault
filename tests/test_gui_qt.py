@@ -512,6 +512,29 @@ class TestEntryPoint:
             code = e.code
         assert code in (0, None)         # дошли до конца main() без traceback
 
+    def test_gui_startup_sets_taskbar_identity(self, app, tmp_path, monkeypatch):
+        """Панель задач должна знать, что это VoxVault, а не python.exe.
+
+        Без AppUserModelID Windows рисует на панели задач значок Python,
+        и кнопка ещё и сливается с другими python-скриптами.
+        """
+        from dictophone import cli, config as cfg_mod
+
+        cfg = tmp_path / "taskbar.json"
+        monkeypatch.setenv("DICTOPHONE_CONFIG", str(cfg))
+        monkeypatch.setattr(gui_qt, "_ensure_required_model", lambda *_: None)
+        cfg_mod.save_config(cfg_mod.Config(first_run=False, ui_lang="ru"), cfg)
+        calls = []
+        monkeypatch.setattr(
+            gui_qt, "set_app_user_model_id",
+            lambda *a: calls.append(a) or True,
+        )
+        try:
+            cli.main(["gui-qt"])
+        except SystemExit:
+            pass
+        assert calls, "идентификатор панели задач не задан при запуске"
+
     def test_main_window_uses_saved_uk_language(self, app, tmp_path):
         """Выбранный украинский должен применяться сразу при создании окна."""
         cfg = config_mod.Config(first_run=False, ui_lang="uk")

@@ -1,4 +1,4 @@
-"""Иконка приложения: окно, диалоги, exe.
+"""Иконка приложения: окно, диалоги, exe, панель задач.
 
 Иконка рисуется кодом, а не грузится из файла. Причины:
 
@@ -14,6 +14,7 @@ Windows показывает в проводнике и на панели зад
 from __future__ import annotations
 
 import struct
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -21,6 +22,35 @@ from PySide6 import QtCore, QtGui
 
 #: Размеры, которые нужны Qt: от мелких в списках до крупных в проводнике.
 ICON_SIZES = (16, 24, 32, 48, 64, 128, 256)
+
+#: Идентификатор приложения для Windows: панель задач, трей, группировка.
+#: Формат — Company.Product.SubProduct.InternalID; значение может быть любым,
+#: но менять его нельзя: Windows по нему узнаёт «своё» приложение, и смена
+#: ломает закрепление на панели задач и группировку окон.
+APP_USER_MODEL_ID = "VoxVault.VoxVault.0"
+
+
+def set_app_user_model_id(app_id: str = APP_USER_MODEL_ID) -> bool:
+    """Объявить окна отдельным приложением VoxVault (только Windows).
+
+    Зачем это нужно. Без явного AppUserModelID Windows считает окно частью
+    того, чем оно запущено, и на панели задач рисует значок Python вместо
+    значка программы. Со своим идентификатором кнопка получает иконку окна,
+    не сливается с другими python-скриптами и не теряется при перезапуске.
+
+    Вызывать ДО создания QApplication и окон. Вне Windows — ничего не
+    делает: Qt сам раздаёт идентификатор по правилам рабочего стола.
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+    except Exception:  # noqa: BLE001 - без идентификатора работаем как раньше
+        return False
+    return True
+
 
 _BRAND_TOP = "#3d7fd6"
 _BRAND_BOTTOM = "#1d4f8f"
