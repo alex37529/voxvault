@@ -25,9 +25,15 @@ from dictophone import __version__
 
 GITHUB_OWNER = "alex37529"
 GITHUB_REPO = "voxvault"
+
+#: Страница релиза на сайте — её открывает кнопка «Скачать обновление».
 REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
-RELEASES_API = f"{REPO_URL}/releases/latest"
 RELEASES_PAGE = f"{REPO_URL}/releases/latest"
+
+#: API GitHub. Именно api.github.com/repos/..., а не страница на github.com:
+#: страница отдаёт HTML, и разбор JSON падает с «непонятный ответ GitHub».
+API_BASE = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
+RELEASES_API = f"{API_BASE}/releases/latest"
 ISSUES_URL = f"{REPO_URL}/issues"
 
 #: Github требует User-Agent у всех запросов и обрывает соединение без него.
@@ -127,7 +133,12 @@ def is_due(last_check: Optional[float], now: Optional[float] = None) -> bool:
 
 
 def _get_json(url: str, timeout: float) -> Any:
-    """GET с JSON-ответом. Сетевые ошибки -> UpdateError (вызывающий решит)."""
+    """GET с JSON-ответом. Сетевые ошибки -> UpdateError (вызывающий решит).
+
+    Отсутствие релизов (404) — не ошибка: возвращаем None, и приложение
+    показывает «обновлений нет». Остальное (лимит запросов, HTML вместо
+    JSON, 500) — UpdateError с понятным текстом.
+    """
     import requests
 
     try:
@@ -141,14 +152,21 @@ def _get_json(url: str, timeout: float) -> Any:
         )
     except Exception as e:  # noqa: BLE001 - сеть отдаёт что угодно
         raise UpdateError(str(e)) from None
-    if response.status_code == 403:
+    if response.status_code == 404:
+        return None               # релизов ещё не было — обновлений нет
+    if response.status_code in (403, 429):
         raise UpdateError("GitHub временно не отвечает (лимит запросов)")
     if response.status_code != 200:
-        raise UpdateError(f"HTTP {response.status_code}")
+        raise UpdateError(f"GitHub ответил кодом {response.status_code}")
+    content_type = (response.headers.get("Content-Type") or "").lower()
     try:
         return response.json()
     except ValueError:
-        raise UpdateError("непонятный ответ GitHub") from None
+        raise UpdateError(
+            "GitHub вернул не JSON "
+            f"(Content-Type: {content_type or 'не указан'}) — "
+            f"проверьте адрес: {url}"
+        ) from None
 
 
 def fetch_latest(

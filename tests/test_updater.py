@@ -108,10 +108,91 @@ class TestFetch:
         with pytest.raises(updater.UpdateError):
             updater.fetch_latest("0.1.0", get_json=boom)
 
+    def test_missing_releases_is_not_an_error(self):
+        """404 = релизов ещё нет; это «обновлений нет», а не поломка."""
+        assert updater.fetch_latest("0.1.0", get_json=lambda url, t: None) is None
+
+    def test_get_json_reports_html_response(self, monkeypatch):
+        import requests
+
+        class FakeResponse:
+            status_code = 200
+            headers = {"Content-Type": "text/html; charset=utf-8"}
+
+            def json(self):
+                raise ValueError("не JSON")
+
+        monkeypatch.setattr(requests, "get", lambda *a, **k: FakeResponse())
+        with pytest.raises(updater.UpdateError) as err:
+            updater._get_json(updater.RELEASES_PAGE, 5.0)
+        message = str(err.value)
+        assert "не JSON" in message
+        assert "text/html" in message
+        assert updater.RELEASES_PAGE in message      # адрес в сообщении
+
+    def test_get_json_treats_404_as_no_releases(self, monkeypatch):
+        import requests
+
+        class FakeResponse:
+            status_code = 404
+            headers = {"Content-Type": "application/json"}
+
+            def json(self):
+                return {"message": "Not Found"}
+
+        monkeypatch.setattr(requests, "get", lambda *a, **k: FakeResponse())
+        assert updater._get_json(updater.RELEASES_API, 5.0) is None
+
+    def test_get_json_explains_rate_limit(self, monkeypatch):
+        import requests
+
+        class FakeResponse:
+            status_code = 403
+            headers = {"Content-Type": "application/json"}
+
+        monkeypatch.setattr(requests, "get", lambda *a, **k: FakeResponse())
+        with pytest.raises(updater.UpdateError, match="лимит"):
+            updater._get_json(updater.RELEASES_API, 5.0)
+
     def test_repository_url_is_voxvault(self):
         assert "alex37529/voxvault" in updater.RELEASES_API
         assert updater.RELEASES_API.startswith("https://")
         assert updater.TIMEOUT <= 30, "слишком долгий таймаут для проверки"
+
+    def test_api_url_is_api_github_not_website(self):
+        """Регресс: страница github.com отдаёт HTML, а не JSON.
+
+        С адресом сайта вместо API проверка всегда падала с «непонятный
+        ответ GitHub», хотя сеть и релиз были в порядке.
+        """
+        assert updater.RELEASES_API == (
+            f"https://api.github.com/repos/{updater.GITHUB_OWNER}"
+            f"/{updater.GITHUB_REPO}/releases/latest"
+        )
+        assert updater.RELEASES_API.startswith("https://api.github.com/repos/")
+        assert updater.RELEASES_API != updater.RELEASES_PAGE
+        # страница релиза остаётся человеческой (её открывает кнопка)
+        assert updater.RELEASES_PAGE.startswith("https://github.com/")
+
+    def test_real_api_answers_json(self):
+        """Боевая проверка адреса: сеть нужна, но молчание API хуже падения.
+
+        Пропускается без сети — тест не должен ронять сборку офлайн.
+        """
+        import requests
+
+        try:
+            response = requests.get(
+                updater.RELEASES_API,
+                timeout=updater.TIMEOUT,
+                headers={"Accept": "application/vnd.github+json",
+                         "User-Agent": updater.USER_AGENT},
+            )
+        except Exception:  # noqa: BLE001 - офлайн
+            pytest.skip("нет сети")
+        if response.status_code != 200:
+            pytest.skip(f"GitHub ответил {response.status_code}")
+        assert isinstance(response.json(), dict)
 
     def test_user_agent_mentions_version(self):
         assert __version__ in updater.USER_AGENT
