@@ -180,13 +180,20 @@ class TestTransientRead:
     def test_retries_once_on_truncated_json(self, tmp_path, monkeypatch):
         target = tmp_path / "zz.json"
         target.write_text('{"app.title": "ok"}', encoding="utf-8")
+        other = tmp_path / "other.json"
+        other.write_text("{}", encoding="utf-8")
         real_read_text = Path.read_text
         calls = []
 
         def flaky(self, *a, **kw):
-            calls.append(self)
-            if len(calls) == 1:
-                return '{"app.title": '  # оборванный файл
+            # считаем только чтения нашего файла: во время паузы между
+            # попытками что угодно может прочитать свой файл, и такой вызов
+            # не имеет отношения к проверке повтора
+            if self == target:
+                calls.append(1)
+                if len(calls) == 1:
+                    other.read_text(encoding="utf-8")  # чужое чтение в паузе
+                    return '{"app.title": '  # оборванный файл
             return real_read_text(self, *a, **kw)
 
         monkeypatch.setattr(Path, "read_text", flaky)
