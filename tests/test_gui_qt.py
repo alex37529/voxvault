@@ -684,28 +684,41 @@ class TestModelsTabHonesty:
         finally:
             dlg.close()
 
-    def test_warm_button_says_which_model(self, app, tmp_path, monkeypatch):
-        """«Прогреть» всегда называет модель из главного окна."""
+    def test_warm_button_lives_in_the_model_block(self, app, tmp_path):
+        """«Прогреть» — действие над конкретной моделью, а не над языком.
+
+        Раньше кнопка была одна на весь язык и прогревала модель из главного
+        окна: выбрав в списке `fa` и нажав её, пользователь получал прогрев
+        `ru/large`. Теперь кнопка есть только у установленной модели, и
+        нажатие переключает главное окно именно на неё.
+        """
         self._install(tmp_path, "ru", "small")
         win = gui_qt.MainWindow(
             config_mod.Config(
                 first_run=False,
                 ui_lang="ru",
                 lang="ru",
-                size="small",
+                size="large",
                 model_dir=str(tmp_path),
             )
         )
+        win._warm_task = None
+        calls = []
         try:
-            dlg = qt_settings.SettingsDialog(win.cfg, I18n("ru").t, win)
-            assert dlg.btn_warm.text().endswith("ru/small")
-            assert dlg.btn_warm.isEnabled() is True
-            # гасится, если выбранной модели на диске нет
-            index = win.size_box.findData("large")
-            win.size_box.setCurrentIndex(index)
-            dlg._refresh_warm_button()
-            assert dlg.btn_warm.text().endswith("ru/large")
-            assert dlg.btn_warm.isEnabled() is False
+            dlg = qt_settings.SettingsDialog(
+                win.cfg, I18n("ru").t, win, on_warm=lambda: calls.append(1)
+            )
+            boxes = self._pick(dlg, "ru")
+            # малая установлена -> её кнопка прогрева есть
+            assert boxes["small"]["warm"].isHidden() is False
+            # большая не установлена -> прогревать нечего
+            assert boxes["large"]["warm"].isHidden() is True
+            boxes["small"]["warm"].click()
+            assert calls == [1]
+            # главное окно переключилось на ту модель, которую прогрели
+            assert win.lang_box.currentData() == "ru"
+            assert win.size_box.currentData() == "small"
+            assert "ru" in dlg.dl_status.text()
             dlg.close()
         finally:
             win._model = None
@@ -1548,16 +1561,29 @@ class TestWarmup:
             win._model = None
             win.close()
 
-    def test_settings_warm_button_connected(self, app):
-        """Кнопка «Прогреть модель сейчас» вызывает колбэк главного окна."""
-        cfg = config_mod.Config()
+    def test_settings_warm_button_connected(self, app, tmp_path):
+        """Кнопка «Прогреть в память» вызывает колбэк главного окна.
+
+        Кнопка живёт в блоке модели и показывается только у установленной,
+        поэтому модель в каталоге отмечаем явно: иначе тест зависел бы от
+        того, что у того, кто его запускает, случайно установлена какая-нибудь
+        модель (в CI моделей нет).
+        """
+        name = models.MODELS["ru"]["small"]
+        (tmp_path / name / "am").mkdir(parents=True)
+        (tmp_path / name / "am" / "final.mdl").write_bytes(b"x")
+        cfg = config_mod.Config(
+            first_run=False, lang="ru", size="small", model_dir=str(tmp_path)
+        )
         win = gui_qt.MainWindow(cfg)
+        win._warm_task = None
         calls = []
         try:
             dlg = gui_qt.SettingsDialog(cfg, win.t, win, on_warm=lambda: calls.append(1))
-            dlg.btn_warm.click()
+            warm = dlg._model_boxes["small"]["warm"]
+            assert warm.isHidden() is False
+            warm.click()
             assert calls == [1]
-            assert dlg.btn_warm.text()  # подпись не пустая
             dlg.close()
         finally:
             win._model = None

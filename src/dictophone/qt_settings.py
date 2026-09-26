@@ -147,7 +147,9 @@ class SettingsDialog(QtWidgets.QDialog):
         Раньше на всём языке была одна кнопка «Скачать», одна «Удалить» и один
         «Прогреть», и при двух установленных моделях было непонятно, к какой
         из них они относятся (удалялась та, что попала в кэш последней).
-        Теперь у каждой модели своя строка состояния и свои кнопки.
+        Теперь у каждой модели своя строка состояния и свои кнопки, включая
+        «Прогреть»: прогрев относится к конкретной модели, а не к языку в
+        списке, поэтому отдельной общей кнопки здесь больше нет.
         """
         box = QtWidgets.QGroupBox(dlay.parentWidget())
         form = QtWidgets.QVBoxLayout(box)
@@ -166,8 +168,10 @@ class SettingsDialog(QtWidgets.QDialog):
         download.clicked.connect(lambda _=False, s=size: self._start_download(s))
         delete = QtWidgets.QPushButton(box)
         delete.clicked.connect(lambda _=False, s=size: self._delete_model(s))
-        row.addWidget(download)
-        row.addWidget(delete)
+        warm = QtWidgets.QPushButton(box)
+        warm.clicked.connect(lambda _=False, s=size: self._warm_model(s))
+        for button in (download, delete, warm):
+            row.addWidget(button)
         row.addStretch(1)
         form.addLayout(row)
 
@@ -178,6 +182,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "state": state,
             "download": download,
             "delete": delete,
+            "warm": warm,
         }
 
     def _tab_models(self) -> QtWidgets.QWidget:
@@ -212,11 +217,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.btn_dl_cancel.clicked.connect(self._cancel_download)
         self.btn_dl_cancel.hide()
         dlay.addWidget(self.btn_dl_cancel)
-
-        self.btn_warm = QtWidgets.QPushButton()
-        self.btn_warm.clicked.connect(self._on_warm_clicked)
-        dlay.addWidget(self.btn_warm)
-        self.warm_hint_label = QtWidgets.QLabel()
+        self.warm_hint_label = QtWidgets.QLabel(self._t("settings.warm_hint"))
         self.warm_hint_label.setWordWrap(True)
         self.warm_hint_label.setStyleSheet("color: palette(mid);")
         dlay.addWidget(self.warm_hint_label)
@@ -241,20 +242,6 @@ class SettingsDialog(QtWidgets.QDialog):
         self._retranslate_models()
         return page
 
-    def _warm_target(self) -> str:
-        """Какую модель прогреет кнопка: ту, что выбрана в главном окне.
-
-        Раньше кнопка просто называлась «Прогреть модель сейчас», и что именно
-        она загрузит, было неочевидно. Теперь это написано в подписи, а если
-        выбранной модели на диске нет — кнопка гаснет.
-        """
-        main = self._main_window()
-        if main is None:
-            return ""
-        lang = main.lang_box.currentData() or self.cfg.lang
-        size = main.size_box.currentData() or "auto"
-        return f"{lang}/{size}"
-
     def _main_window(self):
         """Главное окно, если диалог открыт из него (в тестах — None)."""
         parent = self.parent()
@@ -264,18 +251,43 @@ class SettingsDialog(QtWidgets.QDialog):
             return None
         return parent
 
+    def _warm_model(self, size: str) -> None:
+        """Прогреть именно эту модель: она станет выбранной в главном окне.
+
+        Раньше кнопка «Прогреть модель сейчас» была одна на весь язык и
+        прогревала модель из главного окна — то есть, выбрав в списке `fa`,
+        можно было нажать её и получить прогрев `ru/large`. Теперь кнопка
+        лежит в блоке конкретной модели, и нажатие переключает главное окно
+        на неё, чтобы «прогретое» и «используемое» совпадали.
+        """
+        data = self._current_row_data()
+        if data is None or not data.get(size):
+            return
+        lang = data["lang"]
+        main = self._main_window()
+        if main is not None:
+            for box, value in ((main.lang_box, lang), (main.size_box, size)):
+                index = box.findData(value)
+                if index < 0:
+                    continue
+                box.blockSignals(True)  # выбор сам по себе не должен грузить
+                box.setCurrentIndex(index)
+                box.blockSignals(False)
+        self.cfg.lang = lang
+        self.cfg.size = size
+        self.dl_status.setText(f"{self._t('models.warm_started', lang=lang, size=size)}")
+        if self._on_warm is not None:
+            self._on_warm()
+
     def _retranslate_models(self) -> None:
         """Подписи кнопок вкладки «Модели»."""
         self.btn_dl_cancel.setText(self._t("models.cancel"))
         for widgets in getattr(self, "_model_boxes", {}).values():
             widgets["download"].setText(self._t("models.download"))
             widgets["delete"].setText(self._t("models.delete"))
-        if hasattr(self, "btn_warm"):
-            target = self._warm_target()
-            self.btn_warm.setText(
-                self._t("settings.warm_button") + (f": {target}" if target else "")
-            )
-            self.warm_hint_label.setText(self._t("settings.warm_hint"))
+            widgets["warm"].setText(self._t("models.warm"))
+            widgets["warm"].setToolTip(self._t("models.warm_tooltip"))
+        self.warm_hint_label.setText(self._t("settings.warm_hint"))
         # состояние блоков зависит от подписей, поэтому обновляем и его
         if hasattr(self, "models_list") and self.models_list.currentRow() >= 0:
             self._on_model_picked()
@@ -298,14 +310,16 @@ class SettingsDialog(QtWidgets.QDialog):
                 )
                 widgets["state"].setText(f"{self._t('models.installed')} · {size_mb} МБ")
                 widgets["download"].hide()  # уже скачана — нечего делать
-                widgets["delete"].setText(self._t("models.delete"))
                 widgets["delete"].show()
+                # прогреть имеет смысл только у установленной модели
+                widgets["warm"].show()
             else:
                 widgets["state"].setText(self._t("models.not_installed"))
                 # в подписи кнопки тоже имя архива: что скачается — видно сразу
                 widgets["download"].setText(f"{self._t('models.download')} · {name}")
                 widgets["download"].show()
                 widgets["delete"].hide()  # нечего удалять
+                widgets["warm"].hide()  # нечего прогревать
 
     def _fill_models(self) -> None:
         """Список: сначала установленные, потом доступные к скачиванию."""
@@ -361,40 +375,13 @@ class SettingsDialog(QtWidgets.QDialog):
         self.model_warn.setVisible(
             bool(models.MODELS[lang].get("large")) and data["large"] is None
         )
-        self._refresh_warm_button()
-
-    def _refresh_warm_button(self) -> None:
-        """Подпись «Прогреть» всегда говорит, какую модель она загрузит.
-
-        Раньше кнопка просто называлась «Прогреть модель сейчас», и что именно
-        она загрузит, было неочевидно. Теперь в подписи видно модель из
-        главного окна, и кнопка гаснет, если этой модели на диске нет.
-        """
-        if not hasattr(self, "btn_warm"):
-            return
-        target = self._warm_target()
-        if not target:
-            return
-        lang, size = target.split("/")
-        self.btn_warm.setText(f"{self._t('settings.warm_button')}: {target}")
-        installed = (
-            models.find_model(self._model_dir(), lang) is not None
-            if size == "auto"
-            else models.is_installed(self._model_dir(), lang, size)
-        )
-        self.btn_warm.setEnabled(installed)
-
-    def _on_warm_clicked(self) -> None:
-        if self._on_warm is not None:
-            self._on_warm()
 
     def _set_downloading(self, active: bool) -> None:
         """Пока идёт скачивание, блокируем всё, что может сменить модель."""
         for widgets in self._model_boxes.values():
-            widgets["download"].setEnabled(not active)
-            widgets["delete"].setEnabled(not active)
-        for w in (self.models_list, self.btn_warm):
-            w.setEnabled(not active)
+            for key in ("download", "delete", "warm"):
+                widgets[key].setEnabled(not active)
+        self.models_list.setEnabled(not active)
         self.btn_dl_cancel.setVisible(active)
         self.dl_progress.setVisible(active)
         if active:
