@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -86,13 +87,25 @@ def detect_system_lang() -> str:
 
 def _load_file(lang: str) -> dict[str, str]:
     path = LOCALES_DIR / f"{lang}.json"
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        raise ValueError(f"Не удалось прочитать перевод {lang}: {e}") from None
-    if not isinstance(data, dict):
-        raise ValueError(f"Ожидался JSON-объект в {path}")
-    return data
+    # Одна повторная попытка: если файл в этот момент переписывает
+    # pre-commit (mixed-line-ending и подобные хуки правят его на месте),
+    # чтение может попасть в середину записи и вернуть обрывок JSON.
+    for attempt in range(2):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as e:
+            raise ValueError(f"Не удалось прочитать перевод {lang}: {e}") from None
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            if attempt == 0:
+                time.sleep(0.05)  # файл, скорее всего, ещё пишется
+                continue
+            raise ValueError(f"Не удалось разобрать перевод {lang}: {path}") from None
+        if not isinstance(data, dict):
+            raise ValueError(f"Ожидался JSON-объект в {path}")
+        return data
+    raise ValueError(f"Не удалось прочитать перевод {lang}: {path}")
 
 
 def lang_name(tr: Callable[..., str], code: str) -> str:

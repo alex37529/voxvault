@@ -352,6 +352,8 @@ dictophone download --lang ru --size large    # ~1.8 ГБ, точнее
 │   ├── README.ru.md         — русский
 │   ├── README.zh.md         — китайский (упрощённый)
 │   └── screen.png           — скриншот приложения
+├── scripts/
+│   └── setup-dev.ps1/sh     — настройка рабочей копии: зависимости + хуки pre-commit
 ├── src/
 │   ├── requirements.txt     — зависимости (канонично — в pyproject.toml)
 │   └── dictophone/
@@ -408,6 +410,49 @@ for event in iter_mic(model, device=None):  # поток событий
 with Storage() as db:
     db.add(Entry(kind="file", text=result.text, lang=result.lang))
 ```
+
+## Проверки качества (разработчикам)
+
+Каждый коммит проверяется автоматически, и ровно теми же проверками, что и в CI:
+`ruff` (lint и форматирование), `mypy` (типы, `src/`), `bandit` (безопасность)
+плюс проверки файлов (пробелы в конце строк, окончания строк, синтаксис
+JSON/YAML/TOML). Правила лежат в `pyproject.toml`, версии хуков — в
+`.pre-commit-config.yaml`, поэтому локальный запуск и запуск в CI не могут
+разойтись.
+
+### Разовая настройка
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-dev.ps1
+```
+
+```bash
+bash scripts/setup-dev.sh
+```
+
+Скрипт ставит зависимости, выполняет `pre-commit install` (создаётся
+`.git/hooks/pre-commit`) и один раз проверяет весь репозиторий — заодно
+прогреваются окружения хуков. Без последнего шага первый `git commit` минуту
+собирает те же самые окружения с нуля.
+
+### Что происходит при коммите
+
+Инструментам передаются только те файлы, которые входят в коммит. `ruff`
+исправляет то, что может, `ruff format` переписывает файл, поэтому первый
+`git commit` после правки обычно падает с «files were modified by this hook» —
+это ожидаемое поведение: посмотрите `git diff`, сделайте `git add` и
+закоммитьте ещё раз. То, что исправить автоматически нельзя (типы от mypy,
+bandit, ошибки синтаксиса), надо исправить руками.
+
+### Полезные команды
+
+| Команда | Что делает |
+| --- | --- |
+| `python -m pre_commit run --all-files` | проверить весь репозиторий |
+| `python -m pre_commit run ruff --all-files` | только lint и автоправки |
+| `git commit --no-verify` | закоммитить без проверок (в CI их всё равно поймают) |
+| `python -m pre_commit uninstall` | отключить локальный хук |
+| `python -m pre_commit autoupdate` | обновить версии хуков и починить сломанное |
 
 ## Специфика Windows
 

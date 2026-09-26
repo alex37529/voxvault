@@ -5,8 +5,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+import time
 import wave
 from pathlib import Path
 
@@ -20,6 +22,24 @@ if str(SRC) not in sys.path:
 # Тесты не должны блокировать друг друга реальным замком запуска: проверка
 # единственного экземпляра изолирована в tests/test_single_instance.py.
 os.environ.setdefault("VOXVAULT_NO_SINGLE_INSTANCE", "1")
+
+
+def read_json_stable(path: Path) -> dict:
+    """Прочитать JSON с одной повторной попыткой.
+
+    Пока pre-commit переписывает файл (mixed-line-ending, end-of-file),
+    его можно прочитать наполовину — и тест падает из-за чужого хука, а не
+    из-за своей ошибки. Повтор через 50 мс почти всегда попадает в уже
+    готовый файл.
+    """
+    last: Exception | None = None
+    for _ in range(2):
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            last = e
+            time.sleep(0.05)
+    raise AssertionError(f"не удалось прочитать {path}: {last}")
 
 
 @pytest.fixture

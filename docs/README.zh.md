@@ -332,6 +332,8 @@ dictophone download --lang ru --size large    # 约 1.8 GB，更准确
 │   ├── README.ru.md         — 俄语
 │   ├── README.zh.md         — 简体中文
 │   └── screen.png           — 应用程序截图
+├── scripts/
+│   └── setup-dev.ps1/sh     — 开发环境初始化：依赖 + pre-commit 钩子
 ├── src/
 │   ├── requirements.txt     — 依赖清单（以 pyproject.toml 为准）
 │   └── dictophone/
@@ -388,6 +390,45 @@ for event in iter_mic(model, device=None):  # 事件流
 with Storage() as db:
     db.add(Entry(kind="file", text=result.text, lang=result.lang))
 ```
+
+## 质量检查（开发者）
+
+每次提交都会自动检查，而且用的就是 CI 里那套检查：`ruff`（lint 和格式化）、
+`mypy`（类型，`src/`）、`bandit`（安全性），再加上文件级检查（行尾空格、
+行尾符、JSON/YAML/TOML 语法）。规则放在 `pyproject.toml`，钩子版本放在
+`.pre-commit-config.yaml`，所以本地执行和 CI 执行不会跑偏。
+
+### 一次性设置
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-dev.ps1
+```
+
+```bash
+bash scripts/setup-dev.sh
+```
+
+脚本会安装依赖、执行 `pre-commit install`（生成 `.git/hooks/pre-commit`），
+然后完整检查一次仓库，同时把钩子的运行环境预先建好。不做最后这一步的话，
+第一次 `git commit` 要花一分钟重建同样的环境。
+
+### 提交时会发生什么
+
+工具只会收到本次提交里涉及的文件。`ruff` 会自动修一部分，
+`ruff format` 会重写文件，所以改完代码后的第一次 `git commit` 通常会以
+“files were modified by this hook”失败——这正是预期行为：看一眼 `git diff`，
+`git add` 之后再提交一次。无法自动修的（mypy 的类型问题、bandit、语法错误）
+需要手工处理。
+
+### 常用命令
+
+| 命令 | 作用 |
+| --- | --- |
+| `python -m pre_commit run --all-files` | 检查整个仓库 |
+| `python -m pre_commit run ruff --all-files` | 只跑 lint 和自动修复 |
+| `git commit --no-verify` | 跳过检查提交（CI 依然会拦） |
+| `python -m pre_commit uninstall` | 关闭本地钩子 |
+| `python -m pre_commit autoupdate` | 更新钩子版本并修好受影响的部分 |
 
 ## Windows 相关说明
 

@@ -356,6 +356,8 @@ Recognition runs faster than real time on both models.
 │   ├── README.ru.md         — Russian
 │   ├── README.zh.md         — Chinese (Simplified)
 │   └── screen.png           — application screenshot
+├── scripts/
+│   └── setup-dev.ps1/sh     — dev setup: dependencies + pre-commit hooks
 ├── src/
 │   ├── requirements.txt     — dependencies (canonical list in pyproject.toml)
 │   └── dictophone/
@@ -412,6 +414,48 @@ for event in iter_mic(model, device=None):  # event stream
 with Storage() as db:
     db.add(Entry(kind="file", text=result.text, lang=result.lang))
 ```
+
+## Quality checks (developers)
+
+Every commit is checked automatically, and by exactly the same checks as in CI:
+`ruff` (lint + formatting), `mypy` (types, `src/`), `bandit` (security) plus
+file-level checks (trailing whitespace, line endings, JSON/YAML/TOML syntax).
+The rules live in `pyproject.toml`, the hook versions in
+`.pre-commit-config.yaml` — so a local run and a CI run cannot disagree.
+
+### One-time setup
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-dev.ps1
+```
+
+```bash
+bash scripts/setup-dev.sh
+```
+
+The script installs the dependencies, runs `pre-commit install` (that creates
+`.git/hooks/pre-commit`) and then checks the whole repository once — which also
+warms up the hook environments. Without that last step the first `git commit`
+spends a minute building the very same environments from scratch.
+
+### What happens on commit
+
+Only the files included in the commit are passed to the tools. `ruff` fixes
+what it can and `ruff format` rewrites the file, so the first `git commit`
+after editing usually fails with "files were modified by this hook" — that is
+the intended behaviour: look at `git diff`, `git add` the result and commit
+again. Findings that cannot be fixed automatically (mypy types, bandit, syntax
+errors) have to be corrected by hand.
+
+### Useful commands
+
+| Command | What it does |
+| --- | --- |
+| `python -m pre_commit run --all-files` | check the whole repository |
+| `python -m pre_commit run ruff --all-files` | lint and autofix only |
+| `git commit --no-verify` | commit without the checks (CI will still catch it) |
+| `python -m pre_commit uninstall` | disable the local hook |
+| `python -m pre_commit autoupdate` | bump hook versions, then fix what breaks |
 
 ## Windows specifics
 

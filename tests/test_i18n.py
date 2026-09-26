@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -24,10 +25,9 @@ LANGS = available()
 
 @pytest.fixture(scope="module")
 def tables():
-    return {
-        lang: json.loads((i18n.LOCALES_DIR / f"{lang}.json").read_text("utf-8"))
-        for lang in LANGS
-    }
+    from conftest import read_json_stable
+
+    return {lang: read_json_stable(i18n.LOCALES_DIR / f"{lang}.json") for lang in LANGS}
 
 
 class TestCatalog:
@@ -167,6 +167,39 @@ class TestTranslate:
         first = obj.t("btn.record")
         obj.set_lang("ru")
         assert obj.t("btn.record") != first
+
+
+class TestTransientRead:
+    """Словари читаются, даже если файл в этот момент переписывают.
+
+    Хуки pre-commit (mixed-line-ending, end-of-file-fixer) правят
+    `locales/*.json` на месте, и чтение может попасть в середину записи.
+    Без повторной попытки интерфейс молча откатывался бы на ключи.
+    """
+
+    def test_retries_once_on_truncated_json(self, tmp_path, monkeypatch):
+        target = tmp_path / "zz.json"
+        target.write_text('{"app.title": "ok"}', encoding="utf-8")
+        real_read_text = Path.read_text
+        calls = []
+
+        def flaky(self, *a, **kw):
+            calls.append(self)
+            if len(calls) == 1:
+                return '{"app.title": '  # оборванный файл
+            return real_read_text(self, *a, **kw)
+
+        monkeypatch.setattr(Path, "read_text", flaky)
+        monkeypatch.setattr(i18n, "LOCALES_DIR", tmp_path)
+        assert i18n._load_file("zz") == {"app.title": "ok"}
+        assert len(calls) == 2, "повторная попытка не сделана"
+
+    def test_broken_file_still_raises(self, tmp_path, monkeypatch):
+        target = tmp_path / "zz.json"
+        target.write_text("{не json", encoding="utf-8")
+        monkeypatch.setattr(i18n, "LOCALES_DIR", tmp_path)
+        with pytest.raises(ValueError, match="разобрать"):
+            i18n._load_file("zz")
 
 
 class TestLangName:
