@@ -88,6 +88,7 @@
   "settings.warm_hint": "El modelo se carga en segundo plano al iniciar para que Grabar comience inmediatamente.",
   "models.none": "No hay modelos instalados",
   "models.required_title": "Se requiere un modelo de reconocimiento de voz",
+  "model.missing_title": "Modelo no descargado",
   "models.select_model_text": "Elija el idioma y el tamaño del modelo que desea descargar:",
   "models.download_selected": "Descargar el modelo seleccionado",
   "models.required_text": "El modelo {size} para el idioma seleccionado {lang} no está instalado. ¿Descargar ahora?",

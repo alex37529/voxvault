@@ -88,6 +88,7 @@
   "settings.warm_hint": "Le modèle se charge en arrière-plan au démarrage pour lancer l'enregistrement immédiatement.",
   "models.none": "Aucun modèle installé",
   "models.required_title": "Modèle de reconnaissance vocale requis",
+  "model.missing_title": "Modèle non téléchargé",
   "models.select_model_text": "Choisissez la langue et la taille du modèle à télécharger :",
   "models.download_selected": "Télécharger le modèle sélectionné",
   "models.required_text": "Le modèle {size} pour la langue sélectionnée {lang} n'est pas installé. Le télécharger maintenant ?",
