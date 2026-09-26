@@ -121,6 +121,17 @@ def _selftest() -> int:
 
     check("Qt инициализируется", qt_check)
 
+    def taskbar_identity() -> str:
+        from dictophone.app_icon import (
+            APP_USER_MODEL_ID,
+            set_app_user_model_id,
+        )
+
+        applied = set_app_user_model_id()
+        return f"{APP_USER_MODEL_ID} (применён: {applied})"
+
+    check("идентификатор панели задач", taskbar_identity)
+
     guard = SingleInstance()
     if guard.acquire():
         guard.release()

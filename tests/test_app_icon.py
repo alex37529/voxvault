@@ -49,6 +49,51 @@ class TestWindowIcon:
             win.close()
 
 
+class TestTaskbarIdentity:
+    """Идентификатор приложения для панели задач Windows."""
+
+    def test_id_is_stable_and_names_voxvault(self):
+        """Смена значения ломает закрепление и группировку окон в Windows."""
+        assert app_icon.APP_USER_MODEL_ID == "VoxVault.VoxVault.0"
+        assert " " not in app_icon.APP_USER_MODEL_ID
+        assert app_icon.APP_USER_MODEL_ID.startswith("VoxVault")
+
+    def test_set_on_windows_succeeds(self, monkeypatch):
+        monkeypatch.setattr(app_icon.sys, "platform", "win32")
+        calls = []
+
+        class FakeShell32:
+            @staticmethod
+            def SetCurrentProcessExplicitAppUserModelID(app_id):
+                calls.append(app_id)
+
+        class FakeWinDLL:
+            shell32 = FakeShell32
+
+        import ctypes
+
+        monkeypatch.setattr(ctypes, "windll", FakeWinDLL, raising=False)
+        assert app_icon.set_app_user_model_id() is True
+        assert calls == [app_icon.APP_USER_MODEL_ID]
+
+    def test_noop_outside_windows(self, monkeypatch):
+        monkeypatch.setattr(app_icon.sys, "platform", "linux")
+        assert app_icon.set_app_user_model_id() is False
+
+    def test_windows_error_does_not_crash(self, monkeypatch):
+        """Нет ctypes/shell32 — работаем дальше, просто без идентификатора."""
+        monkeypatch.setattr(app_icon.sys, "platform", "win32")
+        import ctypes
+
+        class Boom:
+            @staticmethod
+            def __getattr__(name):
+                raise OSError("no shell32")
+
+        monkeypatch.setattr(ctypes, "windll", Boom, raising=False)
+        assert app_icon.set_app_user_model_id() is False
+
+
 class TestIco:
     def test_ico_header(self):
         data = app_icon.ico_bytes((16, 32, 256))

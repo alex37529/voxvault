@@ -21,7 +21,7 @@ from dictophone import config as config_mod
 from dictophone import devices as devices_mod
 from dictophone import models, storage, transcribe
 from dictophone import qt_workers
-from dictophone.app_icon import qicon
+from dictophone.app_icon import qicon, set_app_user_model_id
 from dictophone.console import setup_console
 from dictophone.i18n import I18n, detect_system_lang, lang_name
 from dictophone.qt_history import HistoryDialog
@@ -989,6 +989,9 @@ def _show_already_running() -> None:
 
 
 def _run_gui(argv: Optional[list[str]] = None) -> int:
+    # Идентификатор приложения для Windows — ДО QApplication и окон: иначе
+    # панель задач покажет значок Python (см. app_icon.set_app_user_model_id).
+    set_app_user_model_id()
     # QApplication — синглтон: если уже создан (например, тестами), переиспользуем
     app = QtWidgets.QApplication.instance()
     owns_app = app is None
@@ -997,6 +1000,7 @@ def _run_gui(argv: Optional[list[str]] = None) -> int:
     # Иконка на уровне приложения: её наследуют все окна и диалоги
     # (настройки, история, сообщения об ошибке), а не только главное окно.
     app.setApplicationName("VoxVault")
+    app.setApplicationDisplayName("VoxVault")   # подпись в панели задач и Alt-Tab
     app.setOrganizationName("dictophone")
     app.setWindowIcon(qicon())
 
