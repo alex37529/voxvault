@@ -17,13 +17,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("PySide6", reason="PySide6 не установлен — GUI-тесты пропущены")
 
-from PySide6 import QtCore, QtWidgets  # noqa: E402
+from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 from dictophone import config as config_mod  # noqa: E402
 from dictophone import gui_qt  # noqa: E402
 from dictophone import models  # noqa: E402
 from dictophone import qt_history, qt_language, qt_model_dialog, qt_settings, qt_workers  # noqa: E402
-from dictophone import storage  # noqa: E402
+from dictophone import storage, updater  # noqa: E402
 from dictophone.i18n import I18n, available  # noqa: E402
 
 
@@ -267,11 +267,210 @@ class TestMainWindow:
             assert gui_qt.AUTHOR_LINKEDIN in html_text
             assert 'href' in html_text
             assert view.openExternalLinks() is True
-            assert dlg.findChild(QtWidgets.QLabel) is None
             dlg.close()
         finally:
             win._model = None
             win.close()
+
+class TestAboutVersion:
+    """Версия и проверка обновлений в окне «О программе»."""
+
+    def _win(self, app, tmp_path, monkeypatch, **kw):
+        monkeypatch.setattr(
+            config_mod, "default_config_path", lambda: tmp_path / "config.json"
+        )
+        cfg = config_mod.Config(
+            first_run=False, ui_lang="ru", model_dir=str(tmp_path), **kw
+        )
+        win = gui_qt.MainWindow(cfg)
+        win._warm_task = None
+        return win
+
+    def _open_about(self, win, monkeypatch):
+        captured = []
+        monkeypatch.setattr(
+            QtWidgets.QDialog, "exec", lambda self: captured.append(self)
+        )
+        win._about()
+        assert len(captured) == 1
+        return captured[0]
+
+    def _release(self, version="9.9.9"):
+        return updater.Release(
+            version=version,
+            url=f"https://github.com/a/b/releases/tag/v{version}",
+            notes="Что нового",
+            download_url=f"https://example/VoxVault-{version}-win64.zip",
+        )
+
+    def test_about_shows_current_version(self, app, tmp_path, monkeypatch):
+        from dictophone import __version__
+
+        win = self._win(app, tmp_path, monkeypatch)
+        try:
+            dlg = self._open_about(win, monkeypatch)
+            assert __version__ in win.about_version.text()
+            assert win.t("about.update_unknown") in win.about_update_status.text()
+            assert win.about_download_btn.isVisibleTo(dlg) is False
+            dlg.close()
+        finally:
+            win._model = None
+            win.close()
+
+    def test_no_update_keeps_download_button_hidden(
+        self, app, tmp_path, monkeypatch
+    ):
+        win = self._win(app, tmp_path, monkeypatch)
+        try:
+            win._on_update_checked(None)
+            assert win.update_state() == "latest"
+            assert win.t("about.update_latest", version=gui_qt.__version__) in (
+                win._update_status_text()
+            )
+            dlg = self._open_about(win, monkeypatch)
+            assert win.about_download_btn.isVisibleTo(dlg) is False
+            # меню осталось обычным — обновлений нет
+            assert win.act_about.text() == win.t("menu.about")
+            dlg.close()
+        finally:
+            win._model = None
+            win.close()
+
+    def test_new_version_offers_download_and_marks_menu(
+        self, app, tmp_path, monkeypatch
+    ):
+        win = self._win(app, tmp_path, monkeypatch)
+        try:
+            win._on_update_checked(self._release())
+            assert win.update_state() == "available"
+            assert win.t("about.update_available", version="9.9.9") in (
+                win._update_status_text()
+            )
+            dlg = self._open_about(win, monkeypatch)
+            assert win.about_download_btn.isVisibleTo(dlg) is True
+            assert "Что нового" in win.about_update_notes.toPlainText()
+            assert "9.9.9" in win.act_about.text()
+            dlg.close()
+        finally:
+            win._model = None
+            win.close()
+
+    def test_download_button_opens_release_in_browser(
+        self, app, tmp_path, monkeypatch
+    ):
+        win = self._win(app, tmp_path, monkeypatch)
+        opened = []
+        monkeypatch.setattr(
+            QtGui.QDesktopServices, "openUrl", lambda url: opened.append(url.toString())
+        )
+        try:
+            win._on_update_checked(self._release())
+            win._on_update_download_clicked()
+            assert opened == ["https://example/VoxVault-9.9.9-win64.zip"]
+            # без найденного релиза кнопка не должна ничего открывать
+            win._on_update_checked(None)
+            win._on_update_download_clicked()
+            assert len(opened) == 1
+        finally:
+            win._model = None
+            win.close()
+
+    def test_open_dialog_is_refreshed_after_check(
+        self, app, tmp_path, monkeypatch
+    ):
+        """Проверка идёт в фоне — открытое окно должно обновиться само."""
+        win = self._win(app, tmp_path, monkeypatch)
+        release = self._release("2.0.0")
+        captured = []
+
+        def exec_and_check(self):
+            # окно «открыто»: проверка завершается прямо сейчас
+            assert win.about_download_btn.isVisibleTo(self) is False
+            win._on_update_checked(release)
+            assert win.about_download_btn.isVisibleTo(self) is True
+            assert "2.0.0" in win.about_update_status.text()
+            assert win.about_check_btn.isEnabled() is True
+            captured.append(self)
+
+        monkeypatch.setattr(QtWidgets.QDialog, "exec", exec_and_check)
+        try:
+            win._about()
+            assert len(captured) == 1
+        finally:
+            win._model = None
+            win.close()
+
+    def test_network_failure_is_not_a_crash(self, app, tmp_path, monkeypatch):
+        win = self._win(app, tmp_path, monkeypatch)
+        try:
+            win._on_update_failed("connection reset")
+            assert win.update_state() == "error"
+            assert "connection reset" in win._update_status_text()
+            dlg = self._open_about(win, monkeypatch)
+            assert win.about_download_btn.isVisibleTo(dlg) is False
+            dlg.close()
+        finally:
+            win._model = None
+            win.close()
+
+    def test_check_happens_at_most_once_a_day(self, app, tmp_path, monkeypatch):
+        win = self._win(app, tmp_path, monkeypatch)
+        started = []
+        monkeypatch.setattr(win, "_start_update_check", lambda: started.append(1))
+        try:
+            # давно не проверяли -> проверяем
+            win.check_updates_silent()
+            assert started == [1]
+            # результат сохранился в настройках
+            win._on_update_checked(None)
+            assert win.cfg.last_update_check
+            assert config_mod.load_config(
+                tmp_path / "config.json"
+            ).last_update_check == win.cfg.last_update_check
+            # второй раз в тот же день сеть дёргать нельзя
+            win.check_updates_silent()
+            assert started == [1]
+        finally:
+            win._model = None
+            win.close()
+
+    def test_silent_check_skipped_while_closing(self, app, tmp_path, monkeypatch):
+        win = self._win(app, tmp_path, monkeypatch)
+        started = []
+        monkeypatch.setattr(
+            win, "_start_update_check", lambda: started.append(1)
+        )
+        try:
+            win._closing = True
+            win.check_updates_silent()
+            assert started == []
+        finally:
+            win._model = None
+            win.close()
+
+    def test_manual_check_button_starts_task(self, app, tmp_path, monkeypatch):
+        win = self._win(app, tmp_path, monkeypatch)
+        started = []
+        monkeypatch.setattr(win, "_start_update_check", lambda: started.append(1))
+        try:
+            dlg = self._open_about(win, monkeypatch)
+            win.about_check_btn.click()
+            assert started == [1]
+            assert win.about_check_btn.isEnabled() is False
+            dlg.close()
+        finally:
+            win._model = None
+            win.close()
+
+
+class TestHistoryDialog:
+    def test_history_dialog_builds(self, app, widget, tmp_path):
+        db = storage.Storage(tmp_path / "history.db")
+        dlg = qt_history.HistoryDialog(I18n("ru").t, db, widget)
+        try:
+            assert dlg.windowTitle() == I18n("ru").t("history.title")
+        finally:
+            dlg.close()
 
     def test_history_dialog_shows_saved_text(self, app, widget, tmp_path):
         db = storage.Storage(tmp_path / "history.db")

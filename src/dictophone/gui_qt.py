@@ -19,8 +19,9 @@ from PySide6.QtCore import QTimer
 
 from dictophone import config as config_mod
 from dictophone import devices as devices_mod
-from dictophone import models, storage, transcribe
+from dictophone import models, storage, transcribe, updater
 from dictophone import qt_workers
+from dictophone import __version__
 from dictophone.app_icon import qicon, set_app_user_model_id
 from dictophone.console import setup_console
 from dictophone.i18n import I18n, detect_system_lang, lang_name
@@ -94,6 +95,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._ui_ready = False         # интерфейс ещё собирается
         self._mic_task: Optional[MicTask] = None
         self._history_dialog: Optional[HistoryDialog] = None
+        # проверка обновлений: результат переживает смену языка интерфейса,
+        # поэтому версию храним как строку, а не как переведённый текст
+        self._update: Optional[updater.Release] = None
+        self._update_checked = False
+        self._update_error = ""
+        self._update_task: Optional[qt_workers.UpdateCheckTask] = None
+        self._about_dialog: Optional[QtWidgets.QDialog] = None
 
         self.setMinimumSize(660, 520)
         self.setWindowIcon(qicon())
@@ -105,6 +113,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # Предогрев: модель грузится в фоне, чтобы «Запись» начиналась сразу
         self._warm_started = time.time()
         QTimer.singleShot(300, self.start_warmup)
+        # Обновления: тихо, не чаще раза в сутки и не раньше, чем окно
+        # показалось. Пользователю показываем только результат.
+        QTimer.singleShot(1500, self.check_updates_silent)
 
     # -- построение --------------------------------------------------------
     def t(self, key: str, /, **kw) -> str:
@@ -316,7 +327,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_exit.setText(self.t("menu.exit"))
         self.act_prefs.setText(self.t("menu.preferences"))
         self.act_out_dir.setText(self.t("menu.open_output"))
-        self.act_about.setText(self.t("menu.about"))
+        self.act_about.setText(self._about_menu_text())
 
         self.lbl_lang.setText(self.t("label.lang"))
         self.lbl_size.setText(self.t("label.model_size"))
@@ -885,23 +896,185 @@ class MainWindow(QtWidgets.QMainWindow):
         dlg = QtWidgets.QDialog(self)
         dlg.setWindowTitle(self.t("about.title"))
         dlg.setMinimumSize(560, 460)
-        lay = QtWidgets.QVBoxLayout(dlg)
-        view = QtWidgets.QTextBrowser(dlg)
-        view.setOpenExternalLinks(True)
-        view.setHtml(_about_html(self.t("about.text"), self.t("about.linkedin")))
-        view.setStyleSheet(
-            "QTextBrowser { border: 1px solid palette(mid); border-radius: 4px; }"
-        )
-        lay.addWidget(view)
+        self._about_dialog = dlg
+        try:
+            lay = QtWidgets.QVBoxLayout(dlg)
+            view = QtWidgets.QTextBrowser(dlg)
+            view.setOpenExternalLinks(True)
+            view.setHtml(_about_html(self.t("about.text"), self.t("about.linkedin")))
+            view.setStyleSheet(
+                "QTextBrowser { border: 1px solid palette(mid); border-radius: 4px; }"
+            )
+            lay.addWidget(view)
+            lay.addWidget(self._build_version_block(dlg))
+            lay.addLayout(self._build_update_buttons(dlg))
 
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.StandardButton.Close, parent=dlg
+            buttons = QtWidgets.QDialogButtonBox(
+                QtWidgets.QDialogButtonBox.StandardButton.Close, parent=dlg
+            )
+            close_btn = buttons.button(QtWidgets.QDialogButtonBox.StandardButton.Close)
+            close_btn.setText(self.t("btn.close"))
+            close_btn.clicked.connect(dlg.accept)
+            lay.addWidget(buttons)
+            dlg.exec()
+        finally:
+            self._about_dialog = None
+
+    def _refresh_about_updates(self) -> None:
+        """Обновить блок обновлений, если диалог «О программе» открыт.
+
+        Проверка идёт в фоне, и пользователь обычно ждёт результата прямо
+        в этом окне: молча сменить текст подписи нельзя, он должен
+        превратиться в кнопку «Скачать».
+        """
+        dlg = self._about_dialog
+        if dlg is None or getattr(self, "about_update_status", None) is None:
+            return
+        self.about_update_status.setText(self._update_status_text())
+        self.about_check_btn.setEnabled(self.update_state() != "checking")
+        self.about_check_btn.setText(self.t("about.update_check"))
+        self.about_download_btn.setVisible(self._update is not None)
+        self.about_update_notes.setVisible(self._update is not None)
+        if self._update is not None and self._update.notes:
+            self.about_update_notes.setMarkdown(self._update.notes)
+
+    def _build_version_block(self, dlg) -> QtWidgets.QWidget:
+        """Номер версии, состояние проверки обновлений и что нового."""
+        box = QtWidgets.QWidget(dlg)
+        form = QtWidgets.QVBoxLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
+
+        self.about_version = QtWidgets.QLabel(box)
+        self.about_version.setText(self.t("about.version", version=__version__))
+        form.addWidget(self.about_version)
+
+        self.about_update_status = QtWidgets.QLabel(box)
+        self.about_update_status.setWordWrap(True)
+        self.about_update_status.setText(self._update_status_text())
+        form.addWidget(self.about_update_status)
+
+        self.about_update_notes = QtWidgets.QTextBrowser(box)
+        self.about_update_notes.setOpenExternalLinks(True)
+        self.about_update_notes.setMaximumHeight(120)
+        self.about_update_notes.setVisible(self._update is not None)
+        if self._update is not None and self._update.notes:
+            self.about_update_notes.setMarkdown(self._update.notes)
+        form.addWidget(self.about_update_notes)
+        return box
+
+    def _build_update_buttons(self, dlg) -> QtWidgets.QHBoxLayout:
+        """Кнопки проверки и скачивания; скачивание видно при наличии релиза."""
+        row = QtWidgets.QHBoxLayout()
+        self.about_check_btn = QtWidgets.QPushButton(self.t("about.update_check"), dlg)
+        self.about_check_btn.clicked.connect(self._on_update_check_clicked)
+        row.addWidget(self.about_check_btn)
+        self.about_download_btn = QtWidgets.QPushButton(
+            self.t("about.update_download"), dlg
         )
-        close_btn = buttons.button(QtWidgets.QDialogButtonBox.StandardButton.Close)
-        close_btn.setText(self.t("btn.close"))
-        close_btn.clicked.connect(dlg.accept)
-        lay.addWidget(buttons)
-        dlg.exec()
+        self.about_download_btn.clicked.connect(self._on_update_download_clicked)
+        self.about_download_btn.setVisible(self._update is not None)
+        row.addWidget(self.about_download_btn)
+        row.addStretch(1)
+        return row
+
+    # -- обновления --------------------------------------------------------
+    def check_updates_silent(self) -> None:
+        """Тихая проверка при запуске: не чаще раза в сутки и не в лицо.
+
+        Пользователь не должен видеть ни диалога, ни ошибки сети — только
+        результат. Если обновлений нет, не показываем вообще ничего.
+        """
+        if self._closing or self._ui_ready is False:
+            return
+        if not updater.is_due(self.cfg.last_update_check):
+            return
+        self._start_update_check()
+
+    def _start_update_check(self) -> None:
+        if self._update_task is not None:
+            return                  # проверка уже идёт
+        self._update_error = ""
+        task = qt_workers.UpdateCheckTask(__version__)
+        task.signals.done.connect(self._on_update_checked)
+        task.signals.failed.connect(self._on_update_failed)
+        self._update_task = task
+        QtCore.QThreadPool.globalInstance().start(task)
+
+    def _on_update_checked(self, release) -> None:
+        self._update_task = None
+        self._update_checked = True
+        self._update = release
+        self._remember_update_check()
+        if release is None:
+            self._refresh_about_updates()
+            return                  # всё актуально — тишина
+        self._retranslate()
+        self.statusBar().showMessage(
+            self.t("update.available", version=release.version), 10000
+        )
+        self._refresh_about_updates()
+
+    def _on_update_failed(self, message: str) -> None:
+        """Сеть недоступна — это не поломка: запомним и предложим повторить."""
+        self._update_task = None
+        self._update_checked = True
+        self._update = None
+        self._update_error = message
+        self._remember_update_check()
+        self._refresh_about_updates()
+        print(f"Не удалось проверить обновления: {message}", flush=True)
+
+    def _remember_update_check(self) -> None:
+        """Отмечаем факт проверки, чтобы не ходить в сеть на каждом запуске."""
+        self.cfg.last_update_check = time.time()
+        self._save_cfg_quietly()
+
+    def update_state(self) -> str:
+        """Состояние проверки: unknown|checking|latest|available|error."""
+        if self._update_task is not None:
+            return "checking"
+        if self._update is not None:
+            return "available"
+        if self._update_error:
+            return "error"
+        if self._update_checked:
+            return "latest"
+        return "unknown"
+
+    def _update_status_text(self) -> str:
+        state = self.update_state()
+        if state == "checking":
+            return self.t("about.update_checking")
+        if state == "available" and self._update is not None:
+            return self.t("about.update_available", version=self._update.version)
+        if state == "error":
+            return self.t("about.update_error", error=self._update_error)
+        if state == "latest":
+            return self.t("about.update_latest", version=__version__)
+        return self.t("about.update_unknown")
+
+    def _on_update_check_clicked(self) -> None:
+        self._start_update_check()
+        if self.about_update_status is not None:
+            self.about_update_status.setText(self.t("about.update_checking"))
+        self.about_check_btn.setEnabled(False)
+        self.about_check_btn.setText(self.t("about.update_checking"))
+
+    def _on_update_download_clicked(self) -> None:
+        """Открыть релиз в браузере.
+
+        Скачивание и запуск exe делает сам пользователь: сборка не
+        подписана, и тихое обновление чужого бинарника — плохая идея.
+        """
+        if self._update is None:
+            return
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl(self._update.asset_url()))
+
+    def _about_menu_text(self) -> str:
+        """«О программе» + пометка, если нашлась новая версия."""
+        if self._update is not None:
+            return self.t("menu.about_update", version=self._update.version)
+        return self.t("menu.about")
 
     def _on_error(self, message: str) -> None:
         self.progress.hide()

@@ -37,6 +37,15 @@ class TestParser:
         for cmd in ("list", "devices", "config", "download", "file", "mic"):
             assert cmd in out
 
+    def test_version_flag_prints_version(self, capsys):
+        """Версия нужна пользователю для отчёта об ошибке."""
+        from dictophone import __version__
+
+        with pytest.raises(SystemExit) as exit_info:
+            cli.main(["--version"])
+        assert exit_info.value.code == 0
+        assert __version__ in capsys.readouterr().out
+
     def test_no_args_prints_help(self, capsys):
         cli.main([])
         assert "usage" in capsys.readouterr().out.lower()

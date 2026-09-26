@@ -77,6 +77,19 @@ class TestLoad:
         with pytest.raises(config_mod.ConfigError, match="first_run"):
             config_mod.load_config(path)
 
+    def test_last_update_check_roundtrip(self, tmp_path):
+        """Время последней проверки обновлений: не забываем и не путаем с текстом."""
+        path = tmp_path / "config.json"
+        config_mod.save_config(config_mod.Config(last_update_check=1700000000.5), path)
+        back = config_mod.load_config(path)
+        assert back.last_update_check == 1700000000.5
+
+    def test_bad_last_update_check_raises(self, tmp_path):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({"last_update_check": "вчера"}), encoding="utf-8")
+        with pytest.raises(config_mod.ConfigError, match="last_update_check"):
+            config_mod.load_config(path)
+
 
 class TestSave:
     def test_roundtrip(self, tmp_path):

@@ -14,7 +14,7 @@ from typing import Optional
 
 from PySide6 import QtCore
 
-from dictophone import models
+from dictophone import models, updater
 
 
 class LoadSignals(QtCore.QObject):
@@ -172,6 +172,41 @@ class MicTestTask(QtCore.QRunnable):
                     self.signals.result.emit("Звук есть, но речь не распознана.")
         except Exception as e:  # noqa: BLE001
             self.signals.failed.emit(f"{type(e).__name__}: {e}")
+
+
+class UpdateCheckSignals(QtCore.QObject):
+    """Сигналы проверки обновлений."""
+
+    done = QtCore.Signal(object)      # updater.Release | None
+    failed = QtCore.Signal(str)
+
+
+class UpdateCheckTask(QtCore.QRunnable):
+    """Спросить GitHub про последний релиз (сеть — только в фоне).
+
+    Сигнал done приходит и когда обновлений нет: там None, чтобы
+    интерфейс отличил «проверили, всё актуально» от «не проверяли».
+    """
+
+    def __init__(self, current_version: str, timeout: float = updater.TIMEOUT):
+        super().__init__()
+        self.signals = UpdateCheckSignals()
+        self.current_version = current_version
+        self.timeout = timeout
+
+    def run(self) -> None:  # pragma: no cover - требует сети
+        try:
+            release = updater.fetch_latest(self.current_version, self.timeout)
+        except Exception as e:  # noqa: BLE001 - сеть отдаёт что угодно
+            try:
+                self.signals.failed.emit(str(e))
+            except RuntimeError:
+                pass
+        else:
+            try:
+                self.signals.done.emit(release)
+            except RuntimeError:
+                pass
 
 
 class ModelDownloadSignals(QtCore.QObject):
