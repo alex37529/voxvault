@@ -14,10 +14,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+from dictophone import __version__, models, storage, transcribe
 from dictophone import config as config_mod
 from dictophone import devices as devices_mod
-from dictophone import models, storage, transcribe
-from dictophone import __version__
 from dictophone.console import setup_console
 
 SIZE_HELP = (
@@ -48,7 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--version", action="version", version=f"VoxVault {__version__}",
+        "--version",
+        action="version",
+        version=f"VoxVault {__version__}",
         help="показать версию программы и выйти",
     )
     sub = parser.add_subparsers(dest="command")

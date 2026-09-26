@@ -19,10 +19,9 @@ from typing import Optional
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QTimer
 
+from dictophone import __version__, models, qt_workers, storage, transcribe, updater
 from dictophone import config as config_mod
 from dictophone import devices as devices_mod
-from dictophone import models, qt_workers, storage, transcribe, updater
-from dictophone import __version__
 from dictophone.app_icon import qicon, set_app_user_model_id
 from dictophone.console import setup_console
 from dictophone.i18n import I18n, detect_system_lang, lang_name
@@ -1011,7 +1010,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _start_update_check(self) -> None:
         if self._update_task is not None:
-            return                  # проверка уже идёт
+            return  # проверка уже идёт
         self._update_error = ""
         task = qt_workers.UpdateCheckTask(__version__)
         task.signals.done.connect(self._on_update_checked)
@@ -1026,7 +1025,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._remember_update_check()
         if release is None:
             self._refresh_about_updates()
-            return                  # всё актуально — тишина
+            return  # всё актуально — тишина
         self._retranslate()
         self.statusBar().showMessage(
             self.t("update.available", version=release.version), 10000

@@ -280,6 +280,7 @@ class TestMainWindow:
             win._model = None
             win.close()
 
+
 class TestAboutVersion:
     """Версия и проверка обновлений в окне «О программе»."""
 
@@ -296,9 +297,7 @@ class TestAboutVersion:
 
     def _open_about(self, win, monkeypatch):
         captured = []
-        monkeypatch.setattr(
-            QtWidgets.QDialog, "exec", lambda self: captured.append(self)
-        )
+        monkeypatch.setattr(QtWidgets.QDialog, "exec", lambda self: captured.append(self))
         win._about()
         assert len(captured) == 1
         return captured[0]
@@ -325,9 +324,7 @@ class TestAboutVersion:
             win._model = None
             win.close()
 
-    def test_no_update_keeps_download_button_hidden(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_no_update_keeps_download_button_hidden(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         try:
             win._on_update_checked(None)
@@ -344,9 +341,7 @@ class TestAboutVersion:
             win._model = None
             win.close()
 
-    def test_new_version_offers_download_and_marks_menu(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_new_version_offers_download_and_marks_menu(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         try:
             win._on_update_checked(self._release())
@@ -363,9 +358,7 @@ class TestAboutVersion:
             win._model = None
             win.close()
 
-    def test_download_button_opens_release_in_browser(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_download_button_opens_release_in_browser(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         opened = []
         monkeypatch.setattr(
@@ -383,9 +376,7 @@ class TestAboutVersion:
             win._model = None
             win.close()
 
-    def test_open_dialog_is_refreshed_after_check(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_open_dialog_is_refreshed_after_check(self, app, tmp_path, monkeypatch):
         """Проверка идёт в фоне — открытое окно должно обновиться само."""
         win = self._win(app, tmp_path, monkeypatch)
         release = self._release("2.0.0")
@@ -432,9 +423,10 @@ class TestAboutVersion:
             # результат сохранился в настройках
             win._on_update_checked(None)
             assert win.cfg.last_update_check
-            assert config_mod.load_config(
-                tmp_path / "config.json"
-            ).last_update_check == win.cfg.last_update_check
+            assert (
+                config_mod.load_config(tmp_path / "config.json").last_update_check
+                == win.cfg.last_update_check
+            )
             # второй раз в тот же день сеть дёргать нельзя
             win.check_updates_silent()
             assert started == [1]
@@ -445,9 +437,7 @@ class TestAboutVersion:
     def test_silent_check_skipped_while_closing(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         started = []
-        monkeypatch.setattr(
-            win, "_start_update_check", lambda: started.append(1)
-        )
+        monkeypatch.setattr(win, "_start_update_check", lambda: started.append(1))
         try:
             win._closing = True
             win.check_updates_silent()

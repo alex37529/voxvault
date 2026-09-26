@@ -3,7 +3,10 @@
 Сеть здесь не нужна: HTTP-слой подменяется функцией-заглушкой, поэтому
 тесты не зависят ни от GitHub, ни от интернета.
 """
+
 from __future__ import annotations
+
+from typing import ClassVar
 
 import pytest
 
@@ -16,10 +19,14 @@ def _payload(tag="v9.9.9", **extra):
         "html_url": "https://github.com/a/b/releases/tag/v9.9.9",
         "body": "  Что нового  ",
         "assets": [
-            {"name": "SHA256SUMS.txt",
-             "browser_download_url": "https://example/SHA256SUMS.txt"},
-            {"name": "VoxVault-9.9.9-win64.zip",
-             "browser_download_url": "https://example/VoxVault-9.9.9-win64.zip"},
+            {
+                "name": "SHA256SUMS.txt",
+                "browser_download_url": "https://example/SHA256SUMS.txt",
+            },
+            {
+                "name": "VoxVault-9.9.9-win64.zip",
+                "browser_download_url": "https://example/VoxVault-9.9.9-win64.zip",
+            },
         ],
     }
     payload.update(extra)
@@ -27,15 +34,18 @@ def _payload(tag="v9.9.9", **extra):
 
 
 class TestVersionParsing:
-    @pytest.mark.parametrize("text,expected", [
-        ("v0.1.1", (0, 1, 1)),
-        ("0.2.0", (0, 2, 0)),
-        ("  v1.12.3  ", (1, 12, 3)),
-        ("v0.2.0-rc1", (0, 2, 0)),
-        ("release-2.0.1", (2, 0, 1)),
-        ("мусор", (0, 0, 0)),
-        ("", (0, 0, 0)),
-    ])
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("v0.1.1", (0, 1, 1)),
+            ("0.2.0", (0, 2, 0)),
+            ("  v1.12.3  ", (1, 12, 3)),
+            ("v0.2.0-rc1", (0, 2, 0)),
+            ("release-2.0.1", (2, 0, 1)),
+            ("мусор", (0, 0, 0)),
+            ("", (0, 0, 0)),
+        ],
+    )
     def test_parse(self, text, expected):
         assert updater.parse_version(text) == expected
 
@@ -56,8 +66,8 @@ class TestRelease:
     def test_newer_release_is_parsed(self):
         release = updater.parse_release(_payload(), current="0.1.0")
         assert release is not None
-        assert release.version == "9.9.9"       # без префикса 'v'
-        assert release.notes == "Что нового"     # без пробелов по краям
+        assert release.version == "9.9.9"  # без префикса 'v'
+        assert release.notes == "Что нового"  # без пробелов по краям
         assert release.url.endswith("/v9.9.9")
 
     def test_download_url_points_to_zip(self):
@@ -82,8 +92,12 @@ class TestRelease:
         assert updater.parse_release({"tag_name": "latest"}) is None
 
     def test_asset_picker_skips_non_zip(self):
-        assets = [{"name": "VoxVault-1.2.3-win64.zip.sig",
-                   "browser_download_url": "https://example/sig"}]
+        assets = [
+            {
+                "name": "VoxVault-1.2.3-win64.zip.sig",
+                "browser_download_url": "https://example/sig",
+            }
+        ]
         assert updater.pick_asset(assets, "1.2.3") is None
         assert updater.pick_asset([], "1.2.3") is None
 
@@ -117,7 +131,7 @@ class TestFetch:
 
         class FakeResponse:
             status_code = 200
-            headers = {"Content-Type": "text/html; charset=utf-8"}
+            headers: ClassVar[dict] = {"Content-Type": "text/html; charset=utf-8"}
 
             def json(self):
                 raise ValueError("не JSON")
@@ -128,14 +142,14 @@ class TestFetch:
         message = str(err.value)
         assert "не JSON" in message
         assert "text/html" in message
-        assert updater.RELEASES_PAGE in message      # адрес в сообщении
+        assert updater.RELEASES_PAGE in message  # адрес в сообщении
 
     def test_get_json_treats_404_as_no_releases(self, monkeypatch):
         import requests
 
         class FakeResponse:
             status_code = 404
-            headers = {"Content-Type": "application/json"}
+            headers: ClassVar[dict] = {"Content-Type": "application/json"}
 
             def json(self):
                 return {"message": "Not Found"}
@@ -148,7 +162,7 @@ class TestFetch:
 
         class FakeResponse:
             status_code = 403
-            headers = {"Content-Type": "application/json"}
+            headers: ClassVar[dict] = {"Content-Type": "application/json"}
 
         monkeypatch.setattr(requests, "get", lambda *a, **k: FakeResponse())
         with pytest.raises(updater.UpdateError, match="лимит"):
@@ -165,10 +179,10 @@ class TestFetch:
         С адресом сайта вместо API проверка всегда падала с «непонятный
         ответ GitHub», хотя сеть и релиз были в порядке.
         """
-        assert updater.RELEASES_API == (
+        assert (
             f"https://api.github.com/repos/{updater.GITHUB_OWNER}"
             f"/{updater.GITHUB_REPO}/releases/latest"
-        )
+        ) == updater.RELEASES_API
         assert updater.RELEASES_API.startswith("https://api.github.com/repos/")
         assert updater.RELEASES_API != updater.RELEASES_PAGE
         # страница релиза остаётся человеческой (её открывает кнопка)
@@ -185,8 +199,10 @@ class TestFetch:
             response = requests.get(
                 updater.RELEASES_API,
                 timeout=updater.TIMEOUT,
-                headers={"Accept": "application/vnd.github+json",
-                         "User-Agent": updater.USER_AGENT},
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": updater.USER_AGENT,
+                },
             )
         except Exception:  # noqa: BLE001 - офлайн
             pytest.skip("нет сети")

@@ -197,7 +197,7 @@ class MicTestTask(QtCore.QRunnable):
 class UpdateCheckSignals(QtCore.QObject):
     """Сигналы проверки обновлений."""
 
-    done = QtCore.Signal(object)      # updater.Release | None
+    done = QtCore.Signal(object)  # updater.Release | None
     failed = QtCore.Signal(str)
 
 
@@ -218,15 +218,11 @@ class UpdateCheckTask(QtCore.QRunnable):
         try:
             release = updater.fetch_latest(self.current_version, self.timeout)
         except Exception as e:  # noqa: BLE001 - сеть отдаёт что угодно
-            try:
+            with contextlib.suppress(RuntimeError):
                 self.signals.failed.emit(str(e))
-            except RuntimeError:
-                pass
         else:
-            try:
+            with contextlib.suppress(RuntimeError):
                 self.signals.done.emit(release)
-            except RuntimeError:
-                pass
 
 
 class ModelDownloadSignals(QtCore.QObject):
