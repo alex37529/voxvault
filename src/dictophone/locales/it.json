@@ -88,6 +88,7 @@
   "settings.warm_hint": "Il modello viene caricato in background all'avvio, così Registra inizia subito.",
   "models.none": "Nessun modello installato",
   "models.required_title": "È necessario un modello di riconoscimento parlato",
+  "model.missing_title": "Modello non scaricato",
   "models.select_model_text": "Scegli la lingua e la dimensione del modello da scaricare:",
   "models.download_selected": "Scarica il modello selezionato",
   "models.required_text": "Il modello {size} per la lingua selezionata {lang} non è installato. Scaricarlo ora?",

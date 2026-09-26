@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 LOCALES_DIR = Path(__file__).resolve().parent / "locales"
 FALLBACK = "en"
@@ -92,6 +92,18 @@ def _load_file(lang: str) -> dict[str, str]:
     if not isinstance(data, dict):
         raise ValueError(f"Ожидался JSON-объект в {path}")
     return data
+
+
+def lang_name(tr: Callable[..., str], code: str) -> str:
+    """Название языка распознавания по переводу; нет перевода — сам код.
+
+    Языки распознавания (ru, en-us, el-gr...) и языки интерфейса — разные
+    наборы, поэтому перевода может не быть: тогда показываем код, как
+    делает выбор модели.
+    """
+    key = f"lang.{code}"
+    text = tr(key)
+    return code if text == key else text
 
 
 class I18n:

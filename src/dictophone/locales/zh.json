@@ -88,6 +88,7 @@
   "settings.warm_hint": "启动时会在后台加载模型，使“录音”立即开始。",
   "models.none": "未安装任何模型",
   "models.required_title": "需要语音识别模型",
+  "model.missing_title": "尚未下载模型",
   "models.select_model_text": "请选择要下载的语言和模型大小：",
   "models.download_selected": "下载所选模型",
   "models.required_text": "尚未安装所选语言 {lang} 的 {size} 模型。现在下载吗？",

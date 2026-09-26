@@ -10,7 +10,13 @@ import json
 import pytest
 
 from dictophone import i18n
-from dictophone.i18n import I18n, available, detect_system_lang, windows_lang
+from dictophone.i18n import (
+    I18n,
+    available,
+    detect_system_lang,
+    lang_name,
+    windows_lang,
+)
 
 LANGS = available()
 
@@ -161,7 +167,26 @@ class TestTranslate:
         assert obj.t("btn.record") != first
 
 
-class TestSystemDetection:
+class TestLangName:
+    """Название языка распознавания для сообщений и списков."""
+
+    def test_known_lang_uses_translation(self):
+        ru = I18n("ru").t
+        assert lang_name(ru, "ru") == "Русский"
+        assert lang_name(ru, "uk") == "Українська"
+
+    def test_unknown_lang_falls_back_to_code(self):
+        """Язык распознавания не всегда есть в словаре — показываем код."""
+        ru = I18n("ru").t
+        assert lang_name(ru, "el-gr") == "el-gr"
+
+    def test_key_never_leaks_to_user(self):
+        for lang in available():
+            tr = I18n(lang).t
+            for code in ("ru", "en-us", "zh", "el-gr"):
+                text = lang_name(tr, code)
+                assert not text.startswith("lang."), (lang, code)
+                assert text
     def test_windows_lang_valid_or_none(self):
         code = windows_lang()
         assert code is None or isinstance(code, str)

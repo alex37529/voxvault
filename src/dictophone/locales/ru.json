@@ -96,6 +96,7 @@
 
   "models.none": "Модели не установлены",
   "models.required_title": "Требуется модель распознавания",
+  "model.missing_title": "Модель не скачана",
   "models.select_model_text": "Выберите язык и размер модели для скачивания:",
   "models.download_selected": "Скачать выбранную модель",
   "models.required_text": "Для выбранного языка {lang} не установлена модель {size}. Скачать её сейчас?",

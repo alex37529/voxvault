@@ -484,6 +484,200 @@ class TestRequiredModel:
         assert shown == []
 
 
+def _install_model(model_dir: Path, lang: str, size: str) -> None:
+    """Разметить каталог как установленную модель VOSK (файлы не нужны)."""
+    name = models.MODELS[lang][size]
+    (model_dir / name / "am").mkdir(parents=True, exist_ok=True)
+    (model_dir / name / "am" / "final.mdl").write_bytes(b"x")
+
+
+class TestMissingModelPrompt:
+    """Выбрали нескачанную модель — предупреждение со скачиванием.
+
+    Раньше в этом месте прогрев молча падал в статус «модель не
+    установлена», а «Запись» выдавала ошибку с инструкцией для командной
+    строки: в окне пользователь не понимал, что делать.
+    """
+
+    def _win(self, app, tmp_path, monkeypatch, **kw):
+        # настройки пишем в tmp_path, иначе тест трогает config.json
+        # пользователя настоящего
+        monkeypatch.setattr(
+            config_mod, "default_config_path", lambda: tmp_path / "config.json"
+        )
+        defaults = dict(
+            first_run=False, ui_lang="ru", lang="ru", size="large",
+            model_dir=str(tmp_path),
+        )
+        cfg = config_mod.Config(**{**defaults, **kw})
+        win = gui_qt.MainWindow(cfg)
+        win._warm_task = None      # прогрев в тестах не нужен
+        return win
+
+    def _spy_load(self, win, monkeypatch):
+        started = []
+        monkeypatch.setattr(
+            win, "_start_load",
+            lambda lang, size, then=None: started.append((lang, size)),
+        )
+        return started
+
+    def test_selection_of_missing_model_asks_and_does_not_load(
+        self, app, tmp_path, monkeypatch
+    ):
+        win = self._win(app, tmp_path, monkeypatch)
+        asked = []
+        monkeypatch.setattr(
+            win, "_ask_download_model",
+            lambda lang, size: asked.append((lang, size)) or False,
+        )
+        started = self._spy_load(win, monkeypatch)
+        try:
+            win._load_selected()
+            assert asked == [("ru", "large")], "не спросили про модель"
+            assert started == [], "попытались грузить нескачанную модель"
+            assert win._status_key == "status.warm_missing"
+        finally:
+            win._model = None
+            win.close()
+
+    def test_declining_download_keeps_status_hint(self, app, tmp_path, monkeypatch):
+        win = self._win(app, tmp_path, monkeypatch)
+        shown = []
+        monkeypatch.setattr(
+            gui_qt.ModelDownloadDialog, "exec",
+            lambda self: shown.append(self) or QtWidgets.QDialog.DialogCode.Rejected,
+        )
+        monkeypatch.setattr(win, "_ask_download_model", lambda *_: True)
+        started = self._spy_load(win, monkeypatch)
+        try:
+            win._load_selected()
+            assert len(shown) == 1, "диалог скачивания не открылся"
+            assert started == []
+            assert win._status_key == "status.warm_missing"
+        finally:
+            win._model = None
+            win.close()
+
+    def test_downloaded_model_is_loaded_and_remembered(
+        self, app, tmp_path, monkeypatch
+    ):
+        win = self._win(app, tmp_path, monkeypatch)
+        monkeypatch.setattr(win, "_ask_download_model", lambda *_: True)
+
+        def accept(self):
+            self.lang_box.setCurrentIndex(self.lang_box.findData("en-us"))
+            self.size_box.setCurrentIndex(self.size_box.findData("large"))
+            _install_model(tmp_path, "en-us", "large")   # «скачали»
+            return QtWidgets.QDialog.DialogCode.Accepted
+
+        monkeypatch.setattr(gui_qt.ModelDownloadDialog, "exec", accept)
+        started = self._spy_load(win, monkeypatch)
+        try:
+            win._load_selected()
+            assert started == [("en-us", "large")]
+            # выбор сохранился и в списках, и в настройках
+            assert win.lang_box.currentData() == "en-us"
+            assert win.size_box.currentData() == "large"
+            saved = config_mod.load_config(tmp_path / "config.json")
+            assert saved.lang == "en-us" and saved.size == "large"
+        finally:
+            win._model = None
+            win.close()
+
+    def test_installed_model_loads_without_any_dialog(
+        self, app, tmp_path, monkeypatch
+    ):
+        _install_model(tmp_path, "ru", "large")
+        win = self._win(app, tmp_path, monkeypatch)
+        asked = []
+        monkeypatch.setattr(
+            win, "_ask_download_model", lambda *a: asked.append(a) or False
+        )
+        started = self._spy_load(win, monkeypatch)
+        try:
+            win._load_selected()
+            assert asked == []
+            assert started == [("ru", "large")]
+        finally:
+            win._model = None
+            win.close()
+
+    def test_record_with_missing_model_offers_download(
+        self, app, tmp_path, monkeypatch
+    ):
+        """«Запись» без модели спрашивает про скачивание, а не ругается ошибкой."""
+        win = self._win(app, tmp_path, monkeypatch)
+        asked = []
+        monkeypatch.setattr(
+            win, "_ask_download_model", lambda *a: asked.append(a) or False
+        )
+        started = self._spy_load(win, monkeypatch)
+        called = []
+        try:
+            win._ensure_model(lambda m: called.append(m))
+            assert len(asked) == 1
+            assert started == []
+            assert called == []
+        finally:
+            win._model = None
+            win.close()
+
+    def test_no_prompt_while_recording(self, app, tmp_path, monkeypatch):
+        """Идущую запись не прерываем модальным вопросом."""
+        win = self._win(app, tmp_path, monkeypatch)
+        asked = []
+        monkeypatch.setattr(
+            win, "_ask_download_model", lambda *a: asked.append(a) or True
+        )
+        started = self._spy_load(win, monkeypatch)
+        try:
+            win._recording_active = True
+            win._load_selected()
+            assert asked == []
+            assert started == []
+        finally:
+            win._recording_active = False
+            win._model = None
+            win.close()
+
+    def test_warning_text_is_translated(self, app, tmp_path, monkeypatch):
+        """Текст предупреждения — на языке интерфейса, с названием языка."""
+        win = self._win(app, tmp_path, monkeypatch)
+        seen = {}
+
+        def fake_exec(self):
+            seen["title"] = self.windowTitle()
+            seen["text"] = self.text()
+            self.buttons()[0].click()      # жмём «Скачать»
+
+        monkeypatch.setattr(QtWidgets.QMessageBox, "exec", fake_exec)
+        try:
+            assert win._ask_download_model("ru", "large") is True
+            assert seen["title"] == win.t("model.missing_title")
+            assert win.t("lang.ru") in seen["text"]
+            assert win.t("size.large") in seen["text"]
+        finally:
+            win._model = None
+            win.close()
+
+    def test_auto_size_warning_mentions_auto(self, app, tmp_path, monkeypatch):
+        win = self._win(app, tmp_path, monkeypatch, size="auto")
+        seen = {}
+
+        def fake_exec(self):
+            seen["text"] = self.text()
+
+        monkeypatch.setattr(QtWidgets.QMessageBox, "exec", fake_exec)
+        try:
+            win._ask_download_model("ru", None)
+            assert win.t("size.auto") in seen["text"]
+        finally:
+            win._model = None
+            win.close()
+
+
+
 class TestEntryPoint:
     """Дымовой тест реальной точки входа.
 

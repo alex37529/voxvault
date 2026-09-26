@@ -96,6 +96,7 @@
 
   "models.none": "No models installed",
   "models.required_title": "Speech recognition model required",
+  "model.missing_title": "Model not downloaded",
   "models.select_model_text": "Choose the language and model size to download:",
   "models.download_selected": "Download selected model",
   "models.required_text": "The {size} model for the selected language {lang} is not installed. Download it now?",

@@ -23,7 +23,7 @@ from dictophone import models, storage, transcribe
 from dictophone import qt_workers
 from dictophone.app_icon import qicon
 from dictophone.console import setup_console
-from dictophone.i18n import I18n, detect_system_lang
+from dictophone.i18n import I18n, detect_system_lang, lang_name
 from dictophone.qt_history import HistoryDialog
 from dictophone.qt_language import run_first_run_language
 from dictophone.qt_model_dialog import ModelDownloadDialog
@@ -402,10 +402,88 @@ class MainWindow(QtWidgets.QMainWindow):
             self.progress.show()
             self.elapsed.setText(self.t("status.checking"))
             return
+        if not self._model_installed(lang, size):
+            # Модель не скачана: сначала предложение её скачать, и только
+            # потом загрузка. Раньше пользователь получал ошибку
+            # «Запустите: py main.py download ...» — в окне это ничего
+            # не объясняло и оставляло без модели.
+            self._offer_model_download(lang, size, lambda: self._ensure_model(then))
+            return
         self._set_busy(True)
         self.progress.show()
         self.elapsed.setText(self.t("status.checking"))
         self._start_load(lang, size, then=then)
+
+    # -- нескачанная модель ------------------------------------------------
+    def _model_installed(self, lang: str, size: Optional[str]) -> bool:
+        """Есть ли в каталоге моделей то, что выбрано в списках."""
+        return models.find_model(self._model_dir(), lang, size) is not None
+
+    def _ask_download_model(self, lang: str, size: Optional[str]) -> bool:
+        """Диалог «модель не скачана, скачать сейчас?». True — скачивать."""
+        box = QtWidgets.QMessageBox(self)
+        box.setIcon(QtWidgets.QMessageBox.Icon.Warning)
+        box.setWindowTitle(self.t("model.missing_title"))
+        box.setText(self.t(
+            "models.required_text",
+            lang=lang_name(self.t, lang),
+            size=self.t(f"size.{size}") if size else self.t("size.auto"),
+        ))
+        download = box.addButton(
+            self.t("models.download"),
+            QtWidgets.QMessageBox.ButtonRole.AcceptRole,
+        )
+        box.addButton(
+            self.t("models.later"), QtWidgets.QMessageBox.ButtonRole.RejectRole
+        )
+        box.setDefaultButton(download)
+        box.exec()
+        return box.clickedButton() is download
+
+    def _offer_model_download(
+        self, lang: str, size: Optional[str], on_ready
+    ) -> bool:
+        """Спросить про выбранную модель и, если её скачали, продолжить.
+
+        on_ready() вызывается после успешной установки — вызывающий перезапускает
+        свой путь (загрузка модели / запись). True — работа продолжена.
+        """
+        if self._closing or self._recording_active or self._ui_ready is False:
+            return False
+        if not self._ask_download_model(lang, size):
+            self._set_warm_status("status.warm_missing", name=self._model_display_name())
+            return False
+        dlg = ModelDownloadDialog(
+            self.t, lang, size or "small", self._model_dir(), self
+        )
+        if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            self._set_warm_status("status.warm_missing", name=self._model_display_name())
+            return False
+        self._apply_model_choice(dlg.selected_language, dlg.selected_size)
+        on_ready()
+        return True
+
+    def _apply_model_choice(self, lang: Optional[str], size: Optional[str]) -> None:
+        """Запомнить скачанную модель: списки и настройки без лишнего перезапуска.
+
+        Сигналы списков глушим: иначе смена языка в диалоге запустила бы вторую
+        проверку и повторный вопрос про ту же модель.
+        """
+        if lang:
+            index = self.lang_box.findData(lang)
+            if index >= 0:
+                self.lang_box.blockSignals(True)
+                self.lang_box.setCurrentIndex(index)
+                self.lang_box.blockSignals(False)
+            self.cfg.lang = lang
+        if size:
+            index = self.size_box.findData(size)
+            if index >= 0:
+                self.size_box.blockSignals(True)
+                self.size_box.setCurrentIndex(index)
+                self.size_box.blockSignals(False)
+            self.cfg.size = size
+        self._save_cfg_quietly()
 
     def _model_display_name(self) -> str:
         lang = self.lang_box.currentData() or self.cfg.lang
@@ -599,8 +677,22 @@ class MainWindow(QtWidgets.QMainWindow):
                 cancel()
             self._warm_task = None
         self._pending_after_load = None
+        QTimer.singleShot(400, self._load_selected)
+
+    def _load_selected(self) -> None:
+        """Прогреть выбранную модель; если её нет — предложить скачать.
+
+        Модель, которой нет, грузить бессмысленно: load_model вернёт ошибку
+        с инструкцией для командной строки. Поэтому сначала проверяем
+        каталог моделей и, если модель не установлена, спрашиваем в диалоге.
+        """
         lang = self.lang_box.currentData() or self.cfg.lang
-        QTimer.singleShot(400, lambda: self._start_load(lang, self._selected_size()))
+        size = self._selected_size()
+        if not self._model_installed(lang, size):
+            self._offer_model_download(lang, size, self._load_selected)
+            return
+        self._start_load(lang, size)
+
 
     def warmup_state(self) -> str:
         """Состояние загрузки для тестов/статуса: ready|loading|missing|"" """

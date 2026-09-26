@@ -88,6 +88,7 @@
   "settings.warm_hint": "Das Modell wird beim Start im Hintergrund geladen, damit die Aufnahme sofort beginnt.",
   "models.none": "Keine Modelle installiert",
   "models.required_title": "Spracherkennungsmodell erforderlich",
+  "model.missing_title": "Modell nicht heruntergeladen",
   "models.select_model_text": "Wählen Sie Sprache und Modellgröße für den Download:",
   "models.download_selected": "Ausgewähltes Modell herunterladen",
   "models.required_text": "Das Modell {size} für die ausgewählte Sprache {lang} ist nicht installiert. Jetzt herunterladen?",

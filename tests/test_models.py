@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -181,8 +182,49 @@ class TestDownloadGuards:
         part.write_bytes(b"PK\x03\x04 partial")
         assert models.find_model(tmp_path, "ru", "large") is None
 
+    def test_download_large_ru_keeps_new_layout_model(self, tmp_path, monkeypatch):
+        """Сценарий из репорта: ru/large скачивается и остаётся на диске.
+
+        Сеть подменена, архив — настоящий zip с раскладкой новой модели
+        (единственный `graph/HCLG.fst`). Раньше такая модель проходила
+        скачивание, но удалялась проверкой как неполная.
+        """
+        import zipfile
+
+        source = tmp_path / "source.zip"
+        name = models.MODELS["ru"]["large"]
+        with zipfile.ZipFile(source, "w") as zf:
+            for relative in models.REQUIRED_MODEL_FILES:
+                zf.writestr(f"{name}/{relative}", "x")
+            zf.writestr(f"{name}/graph/HCLG.fst", "x")
+
+        payload = source.read_bytes()
+        monkeypatch.setattr(
+            models, "_fetch_archive",
+            lambda url, dest, **kw: Path(dest).write_bytes(payload),
+        )
+
+        model_dir = tmp_path / "models"
+        path = models.download_model("ru", "large", model_dir)
+        assert path == model_dir / name
+        assert (path / "graph" / "HCLG.fst").exists()
+        assert models.find_model(model_dir, "ru", "large") == path
+        # временный .part не остаётся рядом с моделью
+        assert not list(model_dir.glob("*.part"))
+
 
 class TestIntegrity:
+    def _make_model(self, root: Path, name: str, graph: str) -> Path:
+        """Разметить каталог под распакованную модель VOSK."""
+        model = root / name
+        for relative in models.REQUIRED_MODEL_FILES:
+            path = model / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"x")
+        (model / "graph").mkdir(parents=True, exist_ok=True)
+        (model / "graph" / graph).write_bytes(b"x")
+        return model
+
     def test_validate_model_dir_lists_missing(self, tmp_path):
         model = tmp_path / "vosk-model-ru-0.42" / "am"
         model.mkdir(parents=True)
@@ -191,13 +233,41 @@ class TestIntegrity:
         assert "conf/mfcc.conf" in missing
         assert "am/final.mdl" not in missing
 
-    def test_validate_accepts_vosk_archive_layout(self, tmp_path):
-        model = tmp_path / "vosk-model-small-ru-0.22"
-        for relative in models.REQUIRED_MODEL_FILES:
-            path = model / relative
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(b"x")
+    @pytest.mark.parametrize("graph", ["Gr.fst", "HCLr.fst", "HCLG.fst"])
+    def test_validate_accepts_any_graph_layout(self, tmp_path, graph):
+        """Имя файла графа у моделей разное — проверка не должна его знать.
+
+        Регресс: требовались `Gr.fst` и `HCLr.fst`, и нормальная большая
+        модель ru-0.42 (в ней один `HCLG.fst`) объявлялась неполной —
+        скачанные 1,8 ГБ удалялись, модель оставалась недоступной.
+        """
+        model = self._make_model(tmp_path, "vosk-model-x", graph)
         assert models.validate_model_dir(model) == []
+
+    def test_validate_reports_missing_graph(self, tmp_path):
+        """Без графа декодирования модель действительно нерабочая."""
+        model = self._make_model(tmp_path, "vosk-model-x", "HCLG.fst")
+        (model / "graph" / "HCLG.fst").unlink()
+        missing = models.validate_model_dir(model)
+        assert missing == ["graph/*.fst"]
+
+    def test_validate_accepts_vosk_archive_layout(self, tmp_path):
+        model = self._make_model(tmp_path, "vosk-model-small-ru-0.22", "HCLr.fst")
+        assert models.validate_model_dir(model) == []
+
+    def test_extract_keeps_model_with_hclg_graph(self, tmp_path):
+        """Модель из новой раскладки должна пережить распаковку."""
+        import zipfile
+
+        arch = tmp_path / "vosk-model-ru-0.42.zip"
+        with zipfile.ZipFile(arch, "w") as zf:
+            for relative in models.REQUIRED_MODEL_FILES:
+                zf.writestr(f"vosk-model-ru-0.42/{relative}", "x")
+            zf.writestr("vosk-model-ru-0.42/graph/HCLG.fst", "x")
+        models._extract_verified(
+            zip_path=arch, model_dir=tmp_path, archive_name="vosk-model-ru-0.42"
+        )
+        assert (tmp_path / "vosk-model-ru-0.42" / "graph" / "HCLG.fst").exists()
 
     def test_extract_rejects_broken_zip(self, tmp_path):
         broken = tmp_path / "vosk-model-ru-0.42.zip"

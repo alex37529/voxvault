@@ -7,6 +7,7 @@ from typing import Callable, Optional
 from PySide6 import QtCore, QtWidgets
 
 from dictophone import models
+from dictophone.i18n import lang_name
 from dictophone.qt_workers import ModelDownloadTask
 
 
@@ -29,10 +30,7 @@ class ModelDownloadDialog(QtWidgets.QDialog):
         form = QtWidgets.QFormLayout()
         self.lang_box = QtWidgets.QComboBox()
         for code in models.known_langs():
-            label = self._t(f"lang.{code}")
-            if label == f"lang.{code}":
-                label = code
-            self.lang_box.addItem(label, code)
+            self.lang_box.addItem(lang_name(self._t, code), code)
         lang_index = self.lang_box.findData(lang)
         self.lang_box.setCurrentIndex(lang_index if lang_index >= 0 else 0)
         form.addRow(self._t("label.lang"), self.lang_box)
