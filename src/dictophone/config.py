@@ -39,6 +39,7 @@ class Config:
     ui_lang: str = "auto"               # 'auto' -> язык интерфейса по системе
     first_run: bool = True              # показать ли выбор языка при запуске
     model_load_time: Optional[float] = None  # факт. время загрузки, с
+    last_update_check: Optional[float] = None  # когда проверяли обновления, unixtime
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -108,12 +109,12 @@ def _coerce(name: str, value: Any) -> Any:
         raise ConfigError(f"Неверное значение {name}={value!r} (нужно true/false)")
     if name in ("output_dir", "model_dir", "db_path"):
         return str(value)
-    if name == "model_load_time":
+    if name in ("model_load_time", "last_update_check"):
         try:
             return float(value)
         except (TypeError, ValueError):
             raise ConfigError(
-                f"Неверное значение model_load_time={value!r} (нужно число)"
+                f"Неверное значение {name}={value!r} (нужно число)"
             ) from None
     if name in ("lang", "device"):
         return str(value)

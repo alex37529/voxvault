@@ -16,6 +16,7 @@ from typing import Any, Optional, Sequence
 from dictophone import config as config_mod
 from dictophone import devices as devices_mod
 from dictophone import models, storage, transcribe
+from dictophone import __version__
 from dictophone.console import setup_console
 
 SIZE_HELP = ("размер модели: small (~50 МБ) | large (~1,8 ГБ); "
@@ -37,6 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="dictophone",
         description="Распознавание речи в текст (VOSK, офлайн, много языков)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"VoxVault {__version__}",
+        help="показать версию программы и выйти",
     )
     sub = parser.add_subparsers(dest="command")
 
