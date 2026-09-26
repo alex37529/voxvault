@@ -34,7 +34,14 @@ dependencies = [
 # GUI нужен не всем: CLI работает и без Qt, поэтому PySide6 — extra, а не
 # обязательная зависимость. В сборку exe ставится через `pip install .[gui]`.
 gui = ["PySide6-Essentials>=6.5"]
-dev = ["pytest>=7.4", "pyinstaller>=6.6"]
+dev = [
+    "pytest>=7.4",
+    "pyinstaller>=6.6",
+    "ruff>=0.16",
+    "mypy>=1.11",
+    "bandit>=1.7",
+    "pre-commit>=3.8",
+]
 
 [project.scripts]
 dictophone = "dictophone.cli:main"
@@ -49,3 +56,86 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
+
+# ---------------------------------------------------------------------------
+# Контроль качества кода
+#
+# Правила зафиксированы явно, а не «по умолчанию»: набор умолчаний у ruff
+# менялся между версиями, и одна и та же команда на разных машинах давала бы
+# разный результат. Всё, что запускает pre-commit, настроено здесь.
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 90
+target-version = "py39"          # см. requires-python выше
+extend-exclude = [
+    "packaging/build",            # сгенерированные файлы сборки
+    ".codebase-memory",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "W",    # предупреждения pycodestyle
+    "F",    # pyflakes: неиспользуемый импорт, опечатки в именах
+    "I",    # isort: порядок импортов
+    "B",    # bugbear: частые ошибки (мутабельные дефолты, цикл в except)
+    "C4",   # comprehensions: list(dict.keys()) -> list(dict)
+    "UP",   # pyupgrade: современный синтаксис для версии проекта
+    "SIM",  # simplify: лишние проверки и вложенности
+    "RET",  # return: хвостовые return None и т.п.
+    "PIE",  # мелкие правки стиля
+    "RUF",  # руфные проверки, которых нет в других наборах
+    "ARG",  # неиспользуемые аргументы (часто — callbacks Qt)
+    "BLE",  # except Exception: ловим слишком широко
+]
+ignore = [
+    # Проект русскоязычный: «ёлочки», тире и неразрывные пробелы в текстах
+    # и комментариях — осознанные, а не опечатки.
+    "RUF001", "RUF002", "RUF003",
+    # Длину строк задаёт форматтер (ruff-format), у E501 свой счёт.
+    "E501",
+    # Проект сознательно остаётся на py3.9-синтаксисе в аннотациях
+    # (Optional[...], Dict[...]) вместо PEP 604/585: так типы читаются
+    # одинаково и в сторонних проверяющих инструментах, и в IDE.
+    "UP006", "UP007", "UP035", "UP045",
+    # Qt и sounddevice зовут системные утилиты, а ошибку мы ловим сами.
+    "SIM115",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# В тестах заглушки, фикстуры и «неиспользуемый» импорт — часть сценария.
+"tests/*" = ["ARG", "F401", "F811", "F841", "SIM117"]
+# CLI: диспетчер зовет все обработчики команд с одинаковой сигнатурой
+# (args, cfg), и часть параметров конкретной команде не нужна.
+"src/dictophone/cli.py" = ["ARG001"]
+# tkinter-версия GUI (легаси, новая — gui_qt): сигнатуры заданы каркасом.
+"src/dictophone/gui.py" = ["ARG001", "ARG002"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dictophone"]
+
+[tool.mypy]
+# python_version здесь не задаём: современный mypy требует >= 3.10, а проект
+# поддерживает 3.9. Уровень синтаксиса пинует ruff (target-version выше), а
+# проверка типов идёт на том интерпретаторе, который её запустил.
+files = ["src"]
+# Qt, vosk и sounddevice без типов (и частично без py.typed) — ругаться на
+# них бессмысленно, проверяем только наш код.
+ignore_missing_imports = true
+follow_imports = "silent"
+# PySide6 в изолированном окружении pre-commit не установлен (крючок тянет
+# только types-*), поэтому подсказки-заглушки то нужны, то нет. Требовать их
+# нельзя — иначе одна и та же проверка падает то локально, то в CI.
+warn_unused_ignores = false
+warn_redundant_casts = true
+no_implicit_optional = true
+show_error_codes = true
+
+[tool.bandit]
+# Уровень: ловим только опасное (SQL/вызовы ОС/hardcoded пароли).
+exclude_dirs = ["packaging/build", "tests"]
+skips = [
+    "B101",    # assert в тестах и проверках — не уязвимость
+    "B324",    # sha1 в models.py — метка имени каталога, не защита
+]

@@ -1,0 +1,49 @@
+# Контроль качества кода перед коммитом.
+#
+# Установка один раз:  python -m pip install pre-commit
+#                      pre-commit install
+# Дальше хуки сами запускаются на каждом `git commit`.
+# Проверить всё по ветке:  pre-commit run --all-files
+#
+# Настройки правил лежат в pyproject.toml ([tool.ruff], [tool.mypy],
+# [tool.bandit]) — здесь только способ запуска. Так конфигурация одна и та же
+# для локальной машины, для CI и для pre-commit.
+#
+# Порядок важен: ruff чинит и форматирует код, mypy уже смотрит на
+# исправленный результат, bandit в конце проверяет безопасность.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.2
+    hooks:
+      - id: ruff          # lint + автоправки
+        args: [--fix]
+      - id: ruff-format   # единый формат кода
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.3.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-PyYAML, types-requests]
+        files: ^src/
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: ["-r", "src", "-lll"]
+        additional_dependencies: [toml]
+        pass_filenames: false
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        files: ^(src/|packaging/|\.github/)
+      - id: check-json
+        files: ^src/dictophone/locales/
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: mixed-line-ending
+        args: [--fix=lf]
