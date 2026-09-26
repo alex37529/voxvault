@@ -13,7 +13,7 @@ from PySide6 import QtCore, QtWidgets
 
 from dictophone import config as config_mod
 from dictophone import models
-from dictophone.i18n import available, detect_system_lang
+from dictophone.i18n import available, detect_system_lang, lang_name
 from dictophone.qt_workers import ModelDownloadTask
 
 
@@ -141,6 +141,50 @@ class SettingsDialog(QtWidgets.QDialog):
             self.device_box.setCurrentIndex(idx)
 
     # -- вкладка «Модели» --------------------------------------------------
+    def _model_group(self, size: str, dlay: QtWidgets.QVBoxLayout) -> None:
+        """Отдельный блок на каждый размер: «малая» и «большая» — разные модели.
+
+        Раньше на всём языке была одна кнопка «Скачать», одна «Удалить» и один
+        «Прогреть», и при двух установленных моделях было непонятно, к какой
+        из них они относятся (удалялась та, что попала в кэш последней).
+        Теперь у каждой модели своя строка состояния и свои кнопки, включая
+        «Прогреть»: прогрев относится к конкретной модели, а не к языку в
+        списке, поэтому отдельной общей кнопки здесь больше нет.
+        """
+        box = QtWidgets.QGroupBox(dlay.parentWidget())
+        form = QtWidgets.QVBoxLayout(box)
+        form.setContentsMargins(10, 8, 10, 8)
+        form.setSpacing(4)
+
+        title = QtWidgets.QLabel(box)
+        title.setStyleSheet("font-weight: 600;")
+        form.addWidget(title)
+        state = QtWidgets.QLabel(box)
+        state.setWordWrap(True)
+        form.addWidget(state)
+
+        row = QtWidgets.QHBoxLayout()
+        download = QtWidgets.QPushButton(box)
+        download.clicked.connect(lambda _=False, s=size: self._start_download(s))
+        delete = QtWidgets.QPushButton(box)
+        delete.clicked.connect(lambda _=False, s=size: self._delete_model(s))
+        warm = QtWidgets.QPushButton(box)
+        warm.clicked.connect(lambda _=False, s=size: self._warm_model(s))
+        for button in (download, delete, warm):
+            row.addWidget(button)
+        row.addStretch(1)
+        form.addLayout(row)
+
+        dlay.addWidget(box)
+        self._model_boxes[size] = {
+            "box": box,
+            "title": title,
+            "state": state,
+            "download": download,
+            "delete": delete,
+            "warm": warm,
+        }
+
     def _tab_models(self) -> QtWidgets.QWidget:
         page = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(page)
@@ -155,6 +199,7 @@ class SettingsDialog(QtWidgets.QDialog):
         dlay = QtWidgets.QVBoxLayout(detail)
         self.model_info = QtWidgets.QLabel()
         self.model_info.setWordWrap(True)
+        self.model_info.setStyleSheet("font-weight: 600;")
         dlay.addWidget(self.model_info)
         self.model_warn = QtWidgets.QLabel()
         self.model_warn.setWordWrap(True)
@@ -162,25 +207,17 @@ class SettingsDialog(QtWidgets.QDialog):
         self.model_warn.hide()
         dlay.addWidget(self.model_warn)
 
-        self.btn_dl_small = QtWidgets.QPushButton()
-        self.btn_dl_small.clicked.connect(lambda: self._start_download("small"))
-        self.btn_dl_large = QtWidgets.QPushButton()
-        self.btn_dl_large.clicked.connect(lambda: self._start_download("large"))
+        # по одному блоку на размер; какие из них показывать, решает
+        # _on_model_picked — по реестру и по тому, что установлено
+        self._model_boxes: dict[str, dict] = {}
+        for size in models.SIZES:
+            self._model_group(size, dlay)
+
         self.btn_dl_cancel = QtWidgets.QPushButton()
         self.btn_dl_cancel.clicked.connect(self._cancel_download)
         self.btn_dl_cancel.hide()
-        dlay.addWidget(self.btn_dl_small)
-        dlay.addWidget(self.btn_dl_large)
         dlay.addWidget(self.btn_dl_cancel)
-
-        self.btn_del = QtWidgets.QPushButton()
-        self.btn_del.clicked.connect(self._delete_model)
-        dlay.addWidget(self.btn_del)
-
-        self.btn_warm = QtWidgets.QPushButton()
-        self.btn_warm.clicked.connect(self._on_warm_clicked)
-        dlay.addWidget(self.btn_warm)
-        self.warm_hint_label = QtWidgets.QLabel()
+        self.warm_hint_label = QtWidgets.QLabel(self._t("settings.warm_hint"))
         self.warm_hint_label.setWordWrap(True)
         self.warm_hint_label.setStyleSheet("color: palette(mid);")
         dlay.addWidget(self.warm_hint_label)
@@ -205,15 +242,84 @@ class SettingsDialog(QtWidgets.QDialog):
         self._retranslate_models()
         return page
 
+    def _main_window(self):
+        """Главное окно, если диалог открыт из него (в тестах — None)."""
+        parent = self.parent()
+        if parent is None or not isinstance(parent, QtWidgets.QMainWindow):
+            return None
+        if not hasattr(parent, "lang_box") or not hasattr(parent, "size_box"):
+            return None
+        return parent
+
+    def _warm_model(self, size: str) -> None:
+        """Прогреть именно эту модель: она станет выбранной в главном окне.
+
+        Раньше кнопка «Прогреть модель сейчас» была одна на весь язык и
+        прогревала модель из главного окна — то есть, выбрав в списке `fa`,
+        можно было нажать её и получить прогрев `ru/large`. Теперь кнопка
+        лежит в блоке конкретной модели, и нажатие переключает главное окно
+        на неё, чтобы «прогретое» и «используемое» совпадали.
+        """
+        data = self._current_row_data()
+        if data is None or not data.get(size):
+            return
+        lang = data["lang"]
+        main = self._main_window()
+        if main is not None:
+            for box, value in ((main.lang_box, lang), (main.size_box, size)):
+                index = box.findData(value)
+                if index < 0:
+                    continue
+                box.blockSignals(True)  # выбор сам по себе не должен грузить
+                box.setCurrentIndex(index)
+                box.blockSignals(False)
+        self.cfg.lang = lang
+        self.cfg.size = size
+        self.dl_status.setText(f"{self._t('models.warm_started', lang=lang, size=size)}")
+        if self._on_warm is not None:
+            self._on_warm()
+
     def _retranslate_models(self) -> None:
         """Подписи кнопок вкладки «Модели»."""
-        self.btn_dl_small.setText(self._t("models.download") + " (small)")
-        self.btn_dl_large.setText(self._t("models.download") + " (large)")
         self.btn_dl_cancel.setText(self._t("models.cancel"))
-        self.btn_del.setText(self._t("models.delete"))
-        if hasattr(self, "btn_warm"):
-            self.btn_warm.setText(self._t("settings.warm_button"))
-            self.warm_hint_label.setText(self._t("settings.warm_hint"))
+        for widgets in getattr(self, "_model_boxes", {}).values():
+            widgets["download"].setText(self._t("models.download"))
+            widgets["delete"].setText(self._t("models.delete"))
+            widgets["warm"].setText(self._t("models.warm"))
+            widgets["warm"].setToolTip(self._t("models.warm_tooltip"))
+        self.warm_hint_label.setText(self._t("settings.warm_hint"))
+        # состояние блоков зависит от подписей, поэтому обновляем и его
+        if hasattr(self, "models_list") and self.models_list.currentRow() >= 0:
+            self._on_model_picked()
+
+    def _update_model_boxes(self, data: dict) -> None:
+        """Показать блок только для тех размеров, которые у языка бывают."""
+        lang = data["lang"]
+        sizes_mb = data.get("sizes_mb") or {}
+        for size, widgets in self._model_boxes.items():
+            name = models.MODELS.get(lang, {}).get(size)
+            if not name:
+                widgets["box"].hide()  # такого размера в реестре нет
+                continue
+            widgets["box"].show()
+            widgets["title"].setText(f"{self._t(f'size.{size}')} · {name}")
+            installed = data[size]
+            if installed:
+                size_mb = sizes_mb.get(size, 0) or models.dir_size_mb(
+                    self._model_dir() / installed
+                )
+                widgets["state"].setText(f"{self._t('models.installed')} · {size_mb} МБ")
+                widgets["download"].hide()  # уже скачана — нечего делать
+                widgets["delete"].show()
+                # прогреть имеет смысл только у установленной модели
+                widgets["warm"].show()
+            else:
+                widgets["state"].setText(self._t("models.not_installed"))
+                # в подписи кнопки тоже имя архива: что скачается — видно сразу
+                widgets["download"].setText(f"{self._t('models.download')} · {name}")
+                widgets["download"].show()
+                widgets["delete"].hide()  # нечего удалять
+                widgets["warm"].hide()  # нечего прогревать
 
     def _fill_models(self) -> None:
         """Список: сначала установленные, потом доступные к скачиванию."""
@@ -223,12 +329,12 @@ class SettingsDialog(QtWidgets.QDialog):
         installed = [r for r in rows if r["path"] is not None]
         missing = [r for r in rows if r["path"] is None]
         for r in installed:
-            kinds = [s for s in ("small", "large") if r[s]]
+            kinds = [s for s in models.SIZES if r[s]]
             self.models_list.addItem(
                 f"✓ {r['lang']:<7} {'+'.join(kinds):<12} {r['size_mb']:>5} МБ"
             )
         for r in missing:
-            avail = [s for s in ("small", "large") if models.MODELS[r["lang"]].get(s)]
+            avail = models.available_sizes(r["lang"])
             self.models_list.addItem(f"  {r['lang']:<7} {','.join(avail)}")
         self.models_list.blockSignals(False)
         if self.models_list.count():
@@ -251,36 +357,31 @@ class SettingsDialog(QtWidgets.QDialog):
         data = self._current_row_data()
         if data is None:
             return
-        parts = []
-        if data["small"]:
-            parts.append(
-                f"{self._t('models.have_small')} "
-                f"({models.dir_size_mb(self._model_dir() / data['small'])} МБ)"
-            )
-        if data["large"]:
-            parts.append(f"{self._t('models.have_large')} ({data['size_mb']} МБ)")
-        self.model_info.setText(
-            " · ".join(parts) if parts else self._t("models.have_none")
-        )
-        self.btn_dl_small.setEnabled(not data["small"])
-        self.btn_dl_large.setEnabled(not data["large"])
-        self.btn_del.setEnabled(data["path"] is not None)
+        lang = data["lang"]
+        name = lang_name(self._t, lang)
+        parts = [lang if name == lang else f"{name} ({lang})"]
+        if not data["path"]:
+            parts.append(self._t("models.have_none"))
+        # Чего нет, говорим словами: у части языков в реестре VOSK только один
+        # размер, и молчаливый «-» читался как «ещё не скачано». Самих блоков
+        # для таких размеров нет, поэтому заметка нужна в заголовке.
+        for size in models.missing_sizes(lang):
+            parts.append(f"{size} — {self._t('models.not_in_registry')}")
+        self.model_info.setText(" · ".join(parts))
+        self._update_model_boxes(data)
         self.model_warn.setText(self._t("models.warn_large"))
-        self.model_warn.setVisible(data["large"] is None)
-
-    def _on_warm_clicked(self) -> None:
-        if self._on_warm is not None:
-            self._on_warm()
+        # предупреждение о размере большой модели нужно только там, где она
+        # существует и ещё не установлена
+        self.model_warn.setVisible(
+            bool(models.MODELS[lang].get("large")) and data["large"] is None
+        )
 
     def _set_downloading(self, active: bool) -> None:
-        for w in (
-            self.btn_dl_small,
-            self.btn_dl_large,
-            self.btn_del,
-            self.models_list,
-            self.btn_warm,
-        ):
-            w.setEnabled(not active)
+        """Пока идёт скачивание, блокируем всё, что может сменить модель."""
+        for widgets in self._model_boxes.values():
+            for key in ("download", "delete", "warm"):
+                widgets[key].setEnabled(not active)
+        self.models_list.setEnabled(not active)
         self.btn_dl_cancel.setVisible(active)
         self.dl_progress.setVisible(active)
         if active:
@@ -291,11 +392,14 @@ class SettingsDialog(QtWidgets.QDialog):
         if data is None or size not in ("small", "large"):
             return
         lang = data["lang"]
-        if models.MODELS[lang].get(size) is None:
+        if not models.size_exists(lang, size):
+            # кнопки для несуществующих размеров скрыты, но подстраховаться
+            # не помешает: сообщение говорит «нет», а не «уже установлено»
             QtWidgets.QMessageBox.information(
                 self,
                 self._t("tab.models"),
-                f"{lang}: {self._t('models.have_none')} ({size})",
+                f"{lang}: {self._t('label.model_size')} {size} — "
+                f"{self._t('models.not_in_registry')}",
             )
             return
         need_mb = models.archive_size_mb(lang, size) or (1800 if size == "large" else 60)
@@ -356,14 +460,28 @@ class SettingsDialog(QtWidgets.QDialog):
         self._download_task = None
         self.dl_status.setText(self._t("models.cancelled"))
 
-    def _delete_model(self) -> None:
+    def _delete_model(self, size: str) -> None:
+        """Удалить конкретную модель (размер), а не «ту, что попала в кэш».
+
+        Раньше кнопка удаления была одна на весь язык, и при двух
+        установленных моделях удалялась та, чей каталог последним попал в
+        список, — в интерфейсе это ни о чём не говорило.
+        """
         data = self._current_row_data()
-        if data is None or data["path"] is None:
+        if data is None or not data.get(size):
             return
+        name = data[size]
+        size_mb = (data.get("sizes_mb") or {}).get(size) or models.dir_size_mb(
+            self._model_dir() / name
+        )
         ans = QtWidgets.QMessageBox.question(
             self,
             self._t("tab.models"),
-            self._t("models.confirm_delete", lang=data["lang"], size=data["size_mb"]),
+            self._t(
+                "models.confirm_delete",
+                lang=f"{self._t(f'size.{size}')} ({name})",
+                size=size_mb,
+            ),
             QtWidgets.QMessageBox.StandardButton.Yes
             | QtWidgets.QMessageBox.StandardButton.No,
             QtWidgets.QMessageBox.StandardButton.No,
@@ -371,7 +489,7 @@ class SettingsDialog(QtWidgets.QDialog):
         if ans != QtWidgets.QMessageBox.StandardButton.Yes:
             return
         try:
-            freed = models.delete_model(data["path"])
+            freed = models.delete_model(self._model_dir() / name)
         except (ValueError, OSError) as e:
             QtWidgets.QMessageBox.warning(self, self._t("tab.models"), str(e))
             return

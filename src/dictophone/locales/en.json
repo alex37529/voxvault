@@ -107,6 +107,7 @@
   "models.close_while_downloading": "Wait for the download to finish or press Cancel.",
   "models.installed": "Installed",
   "models.not_installed": "not installed",
+  "models.not_in_registry": "not in the VOSK registry",
   "models.tab_hint": "Pick a language and press Download.",
   "models.download": "Download",
   "models.delete": "Delete",
@@ -125,6 +126,9 @@
   "models.confirm_delete": "Delete model {lang}? About {size} MB will be freed.",
   "models.no_space": "Not enough space: need ~{size} MB, free {free} MB.",
   "models.speaking": "Recognition in progress — please wait",
+  "models.warm": "Warm up in memory",
+  "models.warm_tooltip": "Load this model into memory ahead of time so “Record” starts immediately. The model becomes the selected one in the main window.",
+  "models.warm_started": "Warming up: {lang} ({size}). It becomes the selected model in the main window.",
 
   "confirm.exit_title": "Exit",
   "confirm.exit_text": "Recording is running or there is unsaved text. Exit without saving?",

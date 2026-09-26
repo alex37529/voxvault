@@ -77,9 +77,11 @@ class ModelDownloadDialog(QtWidgets.QDialog):
         self.size_box.blockSignals(True)
         self.size_box.clear()
         lang = self.lang_box.currentData()
-        available = [s for s in ("small", "large") if models.MODELS.get(lang, {}).get(s)]
-        for value in available:
-            self.size_box.addItem(self._t(f"size.{value}"), value)
+        for value in models.available_sizes(lang):
+            # подпись — с именем архива: видно, что именно скачается
+            self.size_box.addItem(
+                f"{self._t(f'size.{value}')} · {models.MODELS[lang][value]}", value
+            )
         index = self.size_box.findData(preferred)
         self.size_box.setCurrentIndex(index if index >= 0 else 0)
         self.size_box.blockSignals(False)

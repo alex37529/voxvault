@@ -107,6 +107,7 @@
   "models.close_while_downloading": "Дождитесь окончания скачивания или нажмите «Отменить».",
   "models.installed": "Установлено",
   "models.not_installed": "не установлена",
+  "models.not_in_registry": "нет в реестре VOSK",
   "models.tab_hint": "Выберите язык и нажмите «Скачать».",
   "models.download": "Скачать",
   "models.delete": "Удалить",
@@ -125,6 +126,9 @@
   "models.confirm_delete": "Удалить модель {lang}? Освободится ~{size} МБ.",
   "models.no_space": "Недостаточно места: нужно ~{size} МБ, свободно {free} МБ.",
   "models.speaking": "Идёт распознавание — дождитесь окончания",
+  "models.warm": "Прогреть в память",
+  "models.warm_tooltip": "Заранее загрузить эту модель в память, чтобы «Запись» начиналась сразу. Модель станет выбранной в главном окне.",
+  "models.warm_started": "Готовлю модель: {lang} ({size}). Она станет выбранной в главном окне.",
 
   "confirm.exit_title": "Выход",
   "confirm.exit_text": "Идёт запись или есть несохранённый текст. Выйти без сохранения?",
