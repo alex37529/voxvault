@@ -1,8 +1,10 @@
 """Тесты реестра и выбора моделей (models.py)."""
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -30,7 +32,8 @@ class TestDataRoot:
         monkeypatch.setattr(sys, "frozen", True, raising=False)
         # Каталога рядом с exe нет и создать его нельзя (как в Program Files).
         monkeypatch.setattr(
-            sys, "executable",
+            sys,
+            "executable",
             str(tmp_path / "read only root" / "VoxVault.exe"),
         )
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
@@ -62,9 +65,7 @@ class TestRegistry:
             assert any(sizes.values()), f"язык {lang} без размеров"
 
     def test_archive_names_are_unique(self):
-        names = [
-            n for sizes in models.MODELS.values() for n in sizes.values() if n
-        ]
+        names = [n for sizes in models.MODELS.values() for n in sizes.values() if n]
         assert len(names) == len(set(names)), "дублирующиеся имена архивов"
 
     def test_model_name_returns_archive(self):
@@ -170,6 +171,7 @@ class TestDownloadGuards:
             raise RuntimeError("сеть недоступна")
 
         import requests
+
         monkeypatch.setattr(requests, "get", boom)
 
         # download_model переводит сетевые сбои в SystemExit с понятным текстом
@@ -200,7 +202,8 @@ class TestDownloadGuards:
 
         payload = source.read_bytes()
         monkeypatch.setattr(
-            models, "_fetch_archive",
+            models,
+            "_fetch_archive",
             lambda url, dest, **kw: Path(dest).write_bytes(payload),
         )
 
@@ -304,7 +307,7 @@ class TestInstalledAndDelete:
         assert ru["small"] == "vosk-model-small-ru-0.22"
         assert ru["large"] == "vosk-model-ru-0.42"
         assert ru["path"] is not None
-        assert by_lang["ja"]["path"] is None      # не установлена
+        assert by_lang["ja"]["path"] is None  # не установлена
         assert by_lang["ja"]["small"] is None
 
     def test_list_installed_covers_all_langs(self, fake_model_dir):
@@ -340,7 +343,7 @@ class TestInstalledAndDelete:
 class TestDownloadProgress:
     def _fake_response(self, chunks, total):
         class R:
-            headers = {"content-length": str(total)}
+            headers: ClassVar[dict] = {"content-length": str(total)}
 
             def __enter__(self):
                 return self
@@ -374,11 +377,10 @@ class TestDownloadProgress:
     def test_progress_cb_suppresses_stdout(self, tmp_path, monkeypatch, capsys):
         import requests
 
-        monkeypatch.setattr(
-            requests, "get", self._fake_response([b"x" * 100], 100)
+        monkeypatch.setattr(requests, "get", self._fake_response([b"x" * 100], 100))
+        models._fetch_archive(
+            "http://x/a.zip", tmp_path / "b.zip", progress_cb=lambda d, t: None
         )
-        models._fetch_archive("http://x/a.zip", tmp_path / "b.zip",
-                              progress_cb=lambda d, t: None)
         assert "%" not in capsys.readouterr().out
 
     def test_stop_event_cancels(self, tmp_path, monkeypatch):
@@ -386,14 +388,11 @@ class TestDownloadProgress:
 
         import requests
 
-        monkeypatch.setattr(
-            requests, "get", self._fake_response([b"x" * 16] * 5, 80)
-        )
+        monkeypatch.setattr(requests, "get", self._fake_response([b"x" * 16] * 5, 80))
         stop = threading.Event()
-        stop.set()          # отмена до начала
+        stop.set()  # отмена до начала
         with pytest.raises(models.DownloadCancelled):
-            models._fetch_archive("http://x/c.zip", tmp_path / "c.zip",
-                                  stop_event=stop)
+            models._fetch_archive("http://x/c.zip", tmp_path / "c.zip", stop_event=stop)
 
     def test_cancelled_download_leaves_no_part(self, tmp_path, monkeypatch):
         """После отмены .part не должен остаться в каталоге моделей."""
@@ -401,9 +400,7 @@ class TestDownloadProgress:
 
         import requests
 
-        monkeypatch.setattr(
-            requests, "get", self._fake_response([b"x" * 16] * 4, 64)
-        )
+        monkeypatch.setattr(requests, "get", self._fake_response([b"x" * 16] * 4, 64))
         stop = threading.Event()
         stop.set()
         with pytest.raises(models.DownloadCancelled):
@@ -426,6 +423,7 @@ class TestDownloadProgress:
         stop = threading.Event()
         stop.set()
         with pytest.raises(models.DownloadCancelled):
-            models._fetch_archive("http://x/d.zip", tmp_path / "d.zip",
-                                  attempts=3, stop_event=stop)
+            models._fetch_archive(
+                "http://x/d.zip", tmp_path / "d.zip", attempts=3, stop_event=stop
+            )
         assert len(calls) <= 1, "отмена не должна перезапускать попытки"

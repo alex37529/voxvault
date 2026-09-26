@@ -707,19 +707,23 @@ class TestMissingModelPrompt:
         monkeypatch.setattr(
             config_mod, "default_config_path", lambda: tmp_path / "config.json"
         )
-        defaults = dict(
-            first_run=False, ui_lang="ru", lang="ru", size="large",
-            model_dir=str(tmp_path),
-        )
+        defaults = {
+            "first_run": False,
+            "ui_lang": "ru",
+            "lang": "ru",
+            "size": "large",
+            "model_dir": str(tmp_path),
+        }
         cfg = config_mod.Config(**{**defaults, **kw})
         win = gui_qt.MainWindow(cfg)
-        win._warm_task = None      # прогрев в тестах не нужен
+        win._warm_task = None  # прогрев в тестах не нужен
         return win
 
     def _spy_load(self, win, monkeypatch):
         started = []
         monkeypatch.setattr(
-            win, "_start_load",
+            win,
+            "_start_load",
             lambda lang, size, then=None: started.append((lang, size)),
         )
         return started
@@ -730,7 +734,8 @@ class TestMissingModelPrompt:
         win = self._win(app, tmp_path, monkeypatch)
         asked = []
         monkeypatch.setattr(
-            win, "_ask_download_model",
+            win,
+            "_ask_download_model",
             lambda lang, size: asked.append((lang, size)) or False,
         )
         started = self._spy_load(win, monkeypatch)
@@ -747,7 +752,8 @@ class TestMissingModelPrompt:
         win = self._win(app, tmp_path, monkeypatch)
         shown = []
         monkeypatch.setattr(
-            gui_qt.ModelDownloadDialog, "exec",
+            gui_qt.ModelDownloadDialog,
+            "exec",
             lambda self: shown.append(self) or QtWidgets.QDialog.DialogCode.Rejected,
         )
         monkeypatch.setattr(win, "_ask_download_model", lambda *_: True)
@@ -761,16 +767,14 @@ class TestMissingModelPrompt:
             win._model = None
             win.close()
 
-    def test_downloaded_model_is_loaded_and_remembered(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_downloaded_model_is_loaded_and_remembered(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         monkeypatch.setattr(win, "_ask_download_model", lambda *_: True)
 
         def accept(self):
             self.lang_box.setCurrentIndex(self.lang_box.findData("en-us"))
             self.size_box.setCurrentIndex(self.size_box.findData("large"))
-            _install_model(tmp_path, "en-us", "large")   # «скачали»
+            _install_model(tmp_path, "en-us", "large")  # «скачали»
             return QtWidgets.QDialog.DialogCode.Accepted
 
         monkeypatch.setattr(gui_qt.ModelDownloadDialog, "exec", accept)
@@ -787,9 +791,7 @@ class TestMissingModelPrompt:
             win._model = None
             win.close()
 
-    def test_installed_model_loads_without_any_dialog(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_installed_model_loads_without_any_dialog(self, app, tmp_path, monkeypatch):
         _install_model(tmp_path, "ru", "large")
         win = self._win(app, tmp_path, monkeypatch)
         asked = []
@@ -805,9 +807,7 @@ class TestMissingModelPrompt:
             win._model = None
             win.close()
 
-    def test_record_with_missing_model_offers_download(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_record_with_missing_model_offers_download(self, app, tmp_path, monkeypatch):
         """«Запись» без модели спрашивает про скачивание, а не ругается ошибкой."""
         win = self._win(app, tmp_path, monkeypatch)
         asked = []
@@ -851,7 +851,7 @@ class TestMissingModelPrompt:
         def fake_exec(self):
             seen["title"] = self.windowTitle()
             seen["text"] = self.text()
-            self.buttons()[0].click()      # жмём «Скачать»
+            self.buttons()[0].click()  # жмём «Скачать»
 
         monkeypatch.setattr(QtWidgets.QMessageBox, "exec", fake_exec)
         try:
@@ -877,7 +877,6 @@ class TestMissingModelPrompt:
         finally:
             win._model = None
             win.close()
-
 
 
 class TestEntryPoint:
@@ -915,7 +914,8 @@ class TestEntryPoint:
         Без AppUserModelID Windows рисует на панели задач значок Python,
         и кнопка ещё и сливается с другими python-скриптами.
         """
-        from dictophone import cli, config as cfg_mod
+        from dictophone import cli
+        from dictophone import config as cfg_mod
 
         cfg = tmp_path / "taskbar.json"
         monkeypatch.setenv("DICTOPHONE_CONFIG", str(cfg))
@@ -923,13 +923,12 @@ class TestEntryPoint:
         cfg_mod.save_config(cfg_mod.Config(first_run=False, ui_lang="ru"), cfg)
         calls = []
         monkeypatch.setattr(
-            gui_qt, "set_app_user_model_id",
+            gui_qt,
+            "set_app_user_model_id",
             lambda *a: calls.append(a) or True,
         )
-        try:
+        with contextlib.suppress(SystemExit):  # штатное завершение CLI
             cli.main(["gui-qt"])
-        except SystemExit:
-            pass
         assert calls, "идентификатор панели задач не задан при запуске"
 
     def test_main_window_uses_saved_uk_language(self, app, tmp_path):

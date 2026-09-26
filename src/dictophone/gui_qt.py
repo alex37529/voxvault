@@ -5,8 +5,10 @@
   - qt_settings.py — диалог настроек
   - qt_language.py — выбор языка при первом запуске
   - transcript.py  — живая расшифровка (общая с tkinter)"""
+
 from __future__ import annotations
 
+import contextlib
 import html
 import sys
 import threading
@@ -19,8 +21,7 @@ from PySide6.QtCore import QTimer
 
 from dictophone import config as config_mod
 from dictophone import devices as devices_mod
-from dictophone import models, storage, transcribe, updater
-from dictophone import qt_workers
+from dictophone import models, qt_workers, storage, transcribe, updater
 from dictophone import __version__
 from dictophone.app_icon import qicon, set_app_user_model_id
 from dictophone.console import setup_console
@@ -70,6 +71,7 @@ def _about_html(text: str, link_label: str) -> str:
 
 # ---------------------------------------------------------------------------
 
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, cfg: Optional[config_mod.Config] = None):
         super().__init__()
@@ -88,11 +90,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._warm_task: Optional[LoadTask] = None
         self._warm_name = ""
         self._warm_key = ""
-        self._warm_token = 0            # отсекает результаты отменённых задач
+        self._warm_token = 0  # отсекает результаты отменённых задач
         self._pending_after_load = None  # что сделать, когда модель готова
         self._warm_failed = False
-        self._closing = False          # окно закрывается — фоновые задачи стоп
-        self._ui_ready = False         # интерфейс ещё собирается
+        self._closing = False  # окно закрывается — фоновые задачи стоп
+        self._ui_ready = False  # интерфейс ещё собирается
         self._mic_task: Optional[MicTask] = None
         self._history_dialog: Optional[HistoryDialog] = None
         # проверка обновлений: результат переживает смену языка интерфейса,
@@ -158,7 +160,7 @@ class MainWindow(QtWidgets.QMainWindow):
             Path(self.cfg.model_dir) if self.cfg.model_dir else models.DEFAULT_MODEL_DIR
         )
         installed = models.installed_langs(model_dir)
-        for code in (installed or models.known_langs()):
+        for code in installed or models.known_langs():
             self.lang_box.addItem(code, code)
         i = self.lang_box.findData(self.cfg.lang)
         if i >= 0:
@@ -189,7 +191,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # индикатор загрузки
         self.progress = QtWidgets.QProgressBar()
-        self.progress.setRange(0, 0)      # неопределённый: VOSK не отдаёт процент
+        self.progress.setRange(0, 0)  # неопределённый: VOSK не отдаёт процент
         self.progress.setTextVisible(False)
         self.progress.setFixedHeight(6)
         self.progress.hide()
@@ -198,22 +200,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # кнопки
         row = QtWidgets.QHBoxLayout()
         self.btn_record = QtWidgets.QToolButton()
-        self.btn_record.setToolButtonStyle(
-            QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly
-        )
+        self.btn_record.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.btn_record.setIconSize(QtCore.QSize(22, 22))
         self.btn_record.clicked.connect(self._start_mic)
         self.btn_pause = QtWidgets.QToolButton()
-        self.btn_pause.setToolButtonStyle(
-            QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly
-        )
+        self.btn_pause.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.btn_pause.setIconSize(QtCore.QSize(22, 22))
         self.btn_pause.setEnabled(False)
         self.btn_pause.clicked.connect(self._toggle_pause)
         self.btn_stop = QtWidgets.QToolButton()
-        self.btn_stop.setToolButtonStyle(
-            QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly
-        )
+        self.btn_stop.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.btn_stop.setIconSize(QtCore.QSize(22, 22))
         self.btn_stop.clicked.connect(self._stop)
         self.btn_stop.setEnabled(False)
@@ -221,8 +217,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_file.clicked.connect(self._pick_file)
         self.btn_copy = QtWidgets.QPushButton()
         self.btn_copy.clicked.connect(self._copy)
-        for b in (self.btn_record, self.btn_pause, self.btn_stop,
-                  self.btn_file, self.btn_copy):
+        for b in (
+            self.btn_record,
+            self.btn_pause,
+            self.btn_stop,
+            self.btn_file,
+            self.btn_copy,
+        ):
             row.addWidget(b)
         row.addStretch(1)
         self.elapsed = QtWidgets.QLabel()
@@ -266,7 +267,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _fill_devices(self) -> None:
         self.device_box.clear()
-        self._device_specs = [None]
+        self._device_specs: list[Optional[str]] = [None]
         self.device_box.addItem("", None)
         try:
             for d in devices_mod.list_input_devices():
@@ -300,11 +301,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @staticmethod
     def _pause_icon(style: QtWidgets.QStyle, paused: bool) -> QtGui.QIcon:
-        pixmap = style.standardIcon(
-            QtWidgets.QStyle.StandardPixmap.SP_MediaPlay if paused
+        return style.standardIcon(
+            QtWidgets.QStyle.StandardPixmap.SP_MediaPlay
+            if paused
             else QtWidgets.QStyle.StandardPixmap.SP_MediaPause
         )
-        return pixmap
 
     def _update_pause_button(self) -> None:
         key = "btn.resume" if self._recording_paused else "btn.pause"
@@ -345,9 +346,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_stop.setText(self.t("btn.stop"))
         self.btn_stop.setToolTip(self.t("btn.stop_tooltip"))
         self.btn_stop.setAccessibleName(self.t("btn.stop_tooltip"))
-        self.btn_stop.setIcon(self.style().standardIcon(
-            QtWidgets.QStyle.StandardPixmap.SP_MediaStop
-        ))
+        self.btn_stop.setIcon(
+            self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_MediaStop)
+        )
         self.btn_copy.setText(self.t("btn.copy"))
         self.text.setPlaceholderText(self.t("app.empty_hint"))
         self.elapsed.setText(self.t("status.model_tip"))
@@ -435,25 +436,23 @@ class MainWindow(QtWidgets.QMainWindow):
         box = QtWidgets.QMessageBox(self)
         box.setIcon(QtWidgets.QMessageBox.Icon.Warning)
         box.setWindowTitle(self.t("model.missing_title"))
-        box.setText(self.t(
-            "models.required_text",
-            lang=lang_name(self.t, lang),
-            size=self.t(f"size.{size}") if size else self.t("size.auto"),
-        ))
+        box.setText(
+            self.t(
+                "models.required_text",
+                lang=lang_name(self.t, lang),
+                size=self.t(f"size.{size}") if size else self.t("size.auto"),
+            )
+        )
         download = box.addButton(
             self.t("models.download"),
             QtWidgets.QMessageBox.ButtonRole.AcceptRole,
         )
-        box.addButton(
-            self.t("models.later"), QtWidgets.QMessageBox.ButtonRole.RejectRole
-        )
+        box.addButton(self.t("models.later"), QtWidgets.QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(download)
         box.exec()
         return box.clickedButton() is download
 
-    def _offer_model_download(
-        self, lang: str, size: Optional[str], on_ready
-    ) -> bool:
+    def _offer_model_download(self, lang: str, size: Optional[str], on_ready) -> bool:
         """Спросить про выбранную модель и, если её скачали, продолжить.
 
         on_ready() вызывается после успешной установки — вызывающий перезапускает
@@ -464,9 +463,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self._ask_download_model(lang, size):
             self._set_warm_status("status.warm_missing", name=self._model_display_name())
             return False
-        dlg = ModelDownloadDialog(
-            self.t, lang, size or "small", self._model_dir(), self
-        )
+        dlg = ModelDownloadDialog(self.t, lang, size or "small", self._model_dir(), self)
         if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
             self._set_warm_status("status.warm_missing", name=self._model_display_name())
             return False
@@ -507,7 +504,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # -- предогрев модели --------------------------------------------------
     def _model_dir(self) -> Path:
-        return Path(self.cfg.model_dir) if self.cfg.model_dir else models.DEFAULT_MODEL_DIR
+        return (
+            Path(self.cfg.model_dir) if self.cfg.model_dir else models.DEFAULT_MODEL_DIR
+        )
 
     def _current_model_key(self) -> str:
         lang = self.lang_box.currentData() or self.cfg.lang
@@ -554,8 +553,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._warm_name = key
         self._pending_after_load = then
         self._warm_failed = False
-        print(f"Загружаю модель в фоне: {key} — приложением можно пользоваться.",
-              flush=True)
+        print(
+            f"Загружаю модель в фоне: {key} — приложением можно пользоваться.", flush=True
+        )
         self._set_warm_status("status.warming_short", name=key)
 
         task = LoadTask(self._model_dir(), lang, size, auto_download=False)
@@ -563,7 +563,8 @@ class MainWindow(QtWidgets.QMainWindow):
         task.signals.phase.connect(self._on_progress_bar)
         task.signals.ready.connect(
             lambda m, lang=lang, size=size, token=token: self._on_load_ready(
-                m, lang, size, token)
+                m, lang, size, token
+            )
         )
         task.signals.failed.connect(
             lambda msg, token=token: self._on_load_failed(msg, token)
@@ -584,7 +585,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.t("status.loading_wait", name=name, sec=int(elapsed))
                 )
 
-    def _on_progress_bar(self, phase: str, elapsed: float) -> None:
+    def _on_progress_bar(self, phase: str, elapsed: float) -> None:  # noqa: ARG002 - обработчик сигнала phase(phase, elapsed)
         """Прогрессбар нужен, когда загрузка инициирована из «Запись»/файла."""
         if phase == models.PHASE_LOADING:
             self.progress.show()
@@ -597,7 +598,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_load_ready(self, model, lang: str, size, token: int) -> None:
         """Модель готова. token защищает от запоздалых результатов отменённых."""
         if token != self._warm_token:
-            return                       # устаревшая задача — игнор
+            return  # устаревшая задача — игнор
         self._model = model
         self._model_lang = f"{lang}/{size or 'auto'}"
         self._warm_task = None
@@ -607,8 +608,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cfg.model_load_time = round(elapsed, 1)
             self._save_cfg_quietly()
             self._set_warm_status("status.warm_usually", sec=int(elapsed))
-            print(f"Модель {self._warm_key} готова за {elapsed:.0f} с — "
-                  "запись начнётся сразу.", flush=True)
+            print(
+                f"Модель {self._warm_key} готова за {elapsed:.0f} с — "
+                "запись начнётся сразу.",
+                flush=True,
+            )
         else:
             self._set_warm_status("status.warm_ready", name=self._warm_key)
             print(f"Модель {self._warm_key} готова.", flush=True)
@@ -623,8 +627,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._warm_task = None
         self._warm_failed = True
         self._set_warm_status("status.warm_missing", name=self._warm_key)
-        print(f"Модель {self._warm_key} не загрузилась: {message}\n"
-              "Скачайте её в Настройки → Модели.", flush=True)
+        print(
+            f"Модель {self._warm_key} не загрузилась: {message}\n"
+            "Скачайте её в Настройки → Модели.",
+            flush=True,
+        )
         then, self._pending_after_load = self._pending_after_load, None
         if then is not None:
             # Продолжать не с чем: сообщаем вызывающему об ошибке.
@@ -637,10 +644,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._set_status(key, **kw)
 
     def _save_cfg_quietly(self) -> None:
-        try:
+        with contextlib.suppress(OSError):
             config_mod.save_config(self.cfg)
-        except OSError:
-            pass
 
     def _history_db(self) -> storage.Storage:
         path = Path(self.cfg.db_path) if self.cfg.db_path else None
@@ -678,7 +683,7 @@ class MainWindow(QtWidgets.QMainWindow):
         за это время догрузятся списки и успокоятся повторные сигналы.
         """
         if self._ui_ready is False:
-            return                     # интерфейс ещё собирается
+            return  # интерфейс ещё собирается
         self._model = None
         self._model_lang = None
         self._warm_failed = False
@@ -703,7 +708,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self._offer_model_download(lang, size, self._load_selected)
             return
         self._start_load(lang, size)
-
 
     def warmup_state(self) -> str:
         """Состояние загрузки для тестов/статуса: ready|loading|missing|"" """
@@ -732,9 +736,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_stop.setEnabled(True)
         self._update_pause_button()
         self._set_status("status.listening")
-        task = MicTask(model, self._selected_device(), self.stop_event,
-                       self.pause_event)
-        task.signals.event.connect(self._on_mic_event)
+        task = MicTask(model, self._selected_device(), self.stop_event, self.pause_event)
+        task.signals.recognized.connect(self._on_mic_event)
         task.signals.finished.connect(self._on_mic_done)
         task.signals.failed.connect(self._on_error)
         self._mic_task = task
@@ -755,18 +758,22 @@ class MainWindow(QtWidgets.QMainWindow):
         text = pp.apply(raw, capture.segments)
         out_dir = Path(self.cfg.output_dir or models.DEFAULT_OUTPUT_DIR)
         from datetime import datetime
+
         out = out_dir / f"mic_{datetime.now():%Y%m%d_%H%M%S}.txt"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text + "\n", encoding="utf-8")
         device = self._selected_device()
-        self._save_history(storage.Entry(
-            kind="mic", text=text,
-            lang=self.lang_box.currentData() or self.cfg.lang,
-            model_size=self._selected_size() or "auto",
-            device=str(device) if device is not None else None,
-            audio_s=capture.audio_s,
-            output_path=str(out),
-        ))
+        self._save_history(
+            storage.Entry(
+                kind="mic",
+                text=text,
+                lang=self.lang_box.currentData() or self.cfg.lang,
+                model_size=self._selected_size() or "auto",
+                device=str(device) if device is not None else None,
+                audio_s=capture.audio_s,
+                output_path=str(out),
+            )
+        )
         self._recording_active = False
         self._text_dirty = False
         self.transcript.set_authoritative(text)
@@ -802,7 +809,9 @@ class MainWindow(QtWidgets.QMainWindow):
     # -- файл, буфер, настройки -------------------------------------------
     def _pick_file(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, self.t("menu.open_file"), "",
+            self,
+            self.t("menu.open_file"),
+            "",
             "Audio (*.wav *.mp3 *.m4a *.ogg *.flac);;All (*)",
         )
         if path:
@@ -811,12 +820,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self._render()
             self._ensure_model(lambda m: self._transcribe_file(m, Path(path)))
 
-    def _transcribe_file(self, model, path: Path) -> None:
+    def _transcribe_file(self, model, path: Path) -> None:  # noqa: ARG002 - модель здесь не нужна, файл распознаётся заново
         self._set_status("status.processing")
         try:
             result = transcribe.transcribe(
-                path, lang=self.lang_box.currentData() or self.cfg.lang,
-                size=self._selected_size(), output=None,
+                path,
+                lang=self.lang_box.currentData() or self.cfg.lang,
+                size=self._selected_size(),
+                output=None,
             )
         except SystemExit as e:
             self._on_error(str(e))
@@ -828,13 +839,17 @@ class MainWindow(QtWidgets.QMainWindow):
         out = out_dir / f"{path.stem}.txt"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(result.text + "\n", encoding="utf-8")
-        self._save_history(storage.Entry(
-            kind="file", text=result.text,
-            lang=result.lang or self.lang_box.currentData() or self.cfg.lang,
-            model_size=self._selected_size() or "auto",
-            source=str(path), audio_s=result.audio_s,
-            output_path=str(out),
-        ))
+        self._save_history(
+            storage.Entry(
+                kind="file",
+                text=result.text,
+                lang=result.lang or self.lang_box.currentData() or self.cfg.lang,
+                model_size=self._selected_size() or "auto",
+                source=str(path),
+                audio_s=result.audio_s,
+                output_path=str(out),
+            )
+        )
         self._text_dirty = False
         self.transcript.set_authoritative(result.text)
         self._render()
@@ -871,9 +886,13 @@ class MainWindow(QtWidgets.QMainWindow):
         QtCore.QThreadPool.globalInstance().start(task)
 
     def _open_settings(self) -> None:
-        dlg = SettingsDialog(self.cfg, self.t, self,
-                             on_warm=self._warm_from_settings,
-                             on_test=self._test_microphone)
+        dlg = SettingsDialog(
+            self.cfg,
+            self.t,
+            self,
+            on_warm=self._warm_from_settings,
+            on_test=self._test_microphone,
+        )
         if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
             return
         try:
@@ -1092,14 +1111,16 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event) -> None:
         if self._recording_active or self._text_dirty:
             ans = QtWidgets.QMessageBox.question(
-                self, self.t("confirm.exit_title"), self.t("confirm.exit_text"),
+                self,
+                self.t("confirm.exit_title"),
+                self.t("confirm.exit_text"),
                 QtWidgets.QMessageBox.StandardButton.Yes
                 | QtWidgets.QMessageBox.StandardButton.No,
                 QtWidgets.QMessageBox.StandardButton.No,
             )
             if ans != QtWidgets.QMessageBox.StandardButton.Yes:
                 event.ignore()
-                return          # пользователь остался — флаги не трогаем
+                return  # пользователь остался — флаги не трогаем
         # Закрытие подтверждено: гасим фоновые задачи.
         self._closing = True
         self._recording_active = False
@@ -1109,14 +1130,19 @@ class MainWindow(QtWidgets.QMainWindow):
             cancel = getattr(self._warm_task, "cancel", None)
             if callable(cancel):
                 cancel()
-            print("Окно закрыто. Фоновая загрузка модели будет прервана "
-                  "при выходе из программы.", flush=True)
+            print(
+                "Окно закрыто. Фоновая загрузка модели будет прервана "
+                "при выходе из программы.",
+                flush=True,
+            )
         event.accept()
 
 
 def _ensure_required_model(cfg: config_mod.Config, tr) -> None:
-    lang = cfg.lang if cfg.lang in models.MODELS else (
-        models.known_langs()[0] if models.known_langs() else ""
+    lang = (
+        cfg.lang
+        if cfg.lang in models.MODELS
+        else (models.known_langs()[0] if models.known_langs() else "")
     )
     if not lang:
         return
@@ -1165,15 +1191,21 @@ def _run_gui(argv: Optional[list[str]] = None) -> int:
     # Идентификатор приложения для Windows — ДО QApplication и окон: иначе
     # панель задач покажет значок Python (см. app_icon.set_app_user_model_id).
     set_app_user_model_id()
-    # QApplication — синглтон: если уже создан (например, тестами), переиспользуем
-    app = QtWidgets.QApplication.instance()
-    owns_app = app is None
-    if owns_app:
-        app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
+    # QApplication — синглтон: если уже создана (например, тестами),
+    # переиспользуем её. isinstance, а не просто None: instance() отдаёт
+    # QCoreApplication, у которого нет методов QApplication.
+    existing = QtWidgets.QApplication.instance()
+    if isinstance(existing, QtWidgets.QApplication):
+        app, owns_app = existing, False
+    else:
+        app, owns_app = (
+            QtWidgets.QApplication(argv if argv is not None else sys.argv),
+            True,
+        )
     # Иконка на уровне приложения: её наследуют все окна и диалоги
     # (настройки, история, сообщения об ошибке), а не только главное окно.
     app.setApplicationName("VoxVault")
-    app.setApplicationDisplayName("VoxVault")   # подпись в панели задач и Alt-Tab
+    app.setApplicationDisplayName("VoxVault")  # подпись в панели задач и Alt-Tab
     app.setOrganizationName("dictophone")
     app.setWindowIcon(qicon())
 

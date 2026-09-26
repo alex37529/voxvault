@@ -189,6 +189,7 @@ class TestLangName:
                 text = lang_name(tr, code)
                 assert not text.startswith("lang."), (lang, code)
                 assert text
+
     def test_windows_lang_valid_or_none(self):
         code = windows_lang()
         assert code is None or isinstance(code, str)

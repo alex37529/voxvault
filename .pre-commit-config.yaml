@@ -30,7 +30,10 @@ repos:
     rev: 1.9.4
     hooks:
       - id: bandit
-        args: ["-r", "src", "-lll"]
+        # -c pyproject.toml обязателен: без него bandit не читает
+        # [tool.bandit] и ругается на B101/B324, которые мы сознательно
+        # отключили (список skips живёт в одном месте с CI).
+        args: ["-c", "pyproject.toml", "-r", "src", "-lll"]
         additional_dependencies: [toml]
         pass_filenames: false
 
