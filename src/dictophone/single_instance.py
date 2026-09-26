@@ -11,6 +11,7 @@
 Если PySide6 недоступен (CLI без Qt, сборка, тесты ядра) — блокировка
 не работает и разрешается всегда: лучше запустить, чем упасть.
 """
+
 from __future__ import annotations
 
 import os
@@ -56,7 +57,7 @@ class SingleInstance:
             self.acquired = True
             return True
         lock = self._make_lock()
-        if lock is None:               # Qt нет — не блокируем запуск
+        if lock is None:  # Qt нет — не блокируем запуск
             self.acquired = True
             return True
         self._lock = lock
@@ -74,7 +75,7 @@ class SingleInstance:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
         except OSError:
-            return None                 # каталог недоступен — не блокируем
+            return None  # каталог недоступен — не блокируем
         lock = QtCore.QLockFile(str(self._path))
         lock.setStaleLockTime(0)
         return lock
@@ -85,7 +86,7 @@ class SingleInstance:
         self._lock = None
         self.acquired = False
 
-    def __enter__(self) -> "SingleInstance":
+    def __enter__(self) -> SingleInstance:
         if not self.acquire():
             raise RuntimeError("Приложение уже запущено")
         return self

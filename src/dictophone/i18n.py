@@ -6,6 +6,7 @@
 
 Плейсхолдеры вида {name} подставляются через str.format.
 """
+
 from __future__ import annotations
 
 import json
@@ -65,7 +66,7 @@ def windows_lang() -> Optional[str]:
 
         langid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
         return _WIN_LANGID.get(int(langid))
-    except Exception:
+    except Exception:  # noqa: BLE001 - нет ctypes или не-Windows
         return None
 
 
@@ -128,7 +129,9 @@ class I18n:
         if lang in available():
             self._lang = lang
         else:
-            self._lang = FALLBACK if FALLBACK in available() else (available() or [FALLBACK])[0]
+            self._lang = (
+                FALLBACK if FALLBACK in available() else (available() or [FALLBACK])[0]
+            )
 
     def preload(self) -> None:
         """Заранее прочитать все словари — переключение языка станет мгновенным."""
@@ -180,7 +183,4 @@ class I18n:
         import re
 
         pattern = re.compile(r"\{(\w+)\}")
-        return {
-            key: set(pattern.findall(text))
-            for key, text in _load_file(lang).items()
-        }
+        return {key: set(pattern.findall(text)) for key, text in _load_file(lang).items()}

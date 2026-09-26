@@ -18,6 +18,7 @@
 
 После `pip install .` доступна команда `dictophone` без этого файла.
 """
+
 from __future__ import annotations
 
 import sys

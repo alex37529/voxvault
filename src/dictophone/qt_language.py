@@ -3,6 +3,7 @@
 Показывается один раз. Названия языков в списке — на своём языке, поэтому
 выбор понятен независимо от языка, на котором открылся диалог.
 """
+
 from __future__ import annotations
 
 import sys
@@ -71,7 +72,7 @@ def run_first_run_language(cfg: config_mod.Config) -> None:
     Отмена диалога сохраняет язык, определённый системой, и тоже гасит
     `first_run`, поэтому диалог не появляется повторно.
     """
-    probe = I18n()                       # язык системы — на нём и покажем диалог
+    probe = I18n()  # язык системы — на нём и покажем диалог
     probe.preload()
     probe.set_lang(detect_system_lang())
     dlg = LanguageDialog(probe.t, probe.lang)

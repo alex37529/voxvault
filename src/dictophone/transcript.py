@@ -7,6 +7,7 @@
 строку + накопленные закрытые». Если partial дописывать в текст, он
 навсегда остаётся мусором в расшифровке.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

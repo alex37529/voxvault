@@ -1,4 +1,5 @@
 """Тесты настроек (config.py)."""
+
 from __future__ import annotations
 
 import json
@@ -18,18 +19,21 @@ class TestLoad:
         assert cfg.device is None
         assert cfg.ui_lang == "auto"
         assert cfg.ui_lang_or_none() is None
-        assert cfg.first_run is True      # выбор языка ещё не показывали
+        assert cfg.first_run is True  # выбор языка ещё не показывали
 
     def test_existing_config_disables_first_run(self, tmp_path):
         path = tmp_path / "config.json"
-        path.write_text(json.dumps({"ui_lang": "ru", "first_run": True}), encoding="utf-8")
+        path.write_text(
+            json.dumps({"ui_lang": "ru", "first_run": True}), encoding="utf-8"
+        )
         assert config_mod.load_config(path).first_run is False
 
     def test_reads_values(self, tmp_path):
         path = tmp_path / "config.json"
         path.write_text(
-            json.dumps({"lang": "uk", "size": "small", "device": "yeti"},
-                       ensure_ascii=False),
+            json.dumps(
+                {"lang": "uk", "size": "small", "device": "yeti"}, ensure_ascii=False
+            ),
             encoding="utf-8",
         )
         cfg = config_mod.load_config(path)
@@ -66,8 +70,9 @@ class TestLoad:
 
     def test_boolean_keys_parsed(self, tmp_path):
         path = tmp_path / "config.json"
-        path.write_text(json.dumps({"history": False, "first_run": False}),
-                       encoding="utf-8")
+        path.write_text(
+            json.dumps({"history": False, "first_run": False}), encoding="utf-8"
+        )
         cfg = config_mod.load_config(path)
         assert cfg.history is False and cfg.first_run is False
 
@@ -139,7 +144,7 @@ class TestSave:
 class TestSetValues:
     def test_sets_and_persists(self, tmp_path):
         path = tmp_path / "config.json"
-        cfg, saved = config_mod.set_values(
+        cfg, _saved = config_mod.set_values(
             config_mod.Config(), {"lang": "fr", "size": "small"}, path
         )
         assert cfg.lang == "fr" and cfg.size == "small"
@@ -153,6 +158,4 @@ class TestSetValues:
 
     def test_unknown_key_raises(self, tmp_path):
         with pytest.raises(config_mod.ConfigError, match="Неизвестный"):
-            config_mod.set_values(
-                config_mod.Config(), {"bad": "1"}, tmp_path / "c.json"
-            )
+            config_mod.set_values(config_mod.Config(), {"bad": "1"}, tmp_path / "c.json")

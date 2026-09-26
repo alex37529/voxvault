@@ -1,4 +1,5 @@
 """Проверка единственного экземпляра приложения (single_instance.py)."""
+
 from __future__ import annotations
 
 import pytest

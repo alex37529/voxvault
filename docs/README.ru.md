@@ -402,7 +402,7 @@ result = transcribe(Path("audio.wav"), lang="ru", size="small")
 print(result.text, result.audio_s, result.avg_conf)
 
 model = load_model(lang="ru", size="small")
-for event in iter_mic(model, device=None):      # поток событий
+for event in iter_mic(model, device=None):  # поток событий
     print(event.kind, event.text)
 
 with Storage() as db:

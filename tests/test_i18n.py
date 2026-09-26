@@ -3,6 +3,7 @@
 Ключевая защита от типичной ошибки локализации: наборы ключей и плейсхолдеров
 во всех языках должны совпадать. Иначе перевод «отваливается» в рантайме.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,8 +24,10 @@ LANGS = available()
 
 @pytest.fixture(scope="module")
 def tables():
-    return {lang: json.loads((i18n.LOCALES_DIR / f"{lang}.json").read_text("utf-8"))
-            for lang in LANGS}
+    return {
+        lang: json.loads((i18n.LOCALES_DIR / f"{lang}.json").read_text("utf-8"))
+        for lang in LANGS
+    }
 
 
 class TestCatalog:
@@ -69,8 +72,7 @@ class TestCatalog:
         for lang, table in per_lang.items():
             for key, names in table.items():
                 assert names == base[key], (
-                    f"{lang}:{key} плейсхолдеры {sorted(names)} "
-                    f"!= {sorted(base[key])}"
+                    f"{lang}:{key} плейсхолдеры {sorted(names)} != {sorted(base[key])}"
                 )
 
     def test_no_source_strings_as_keys(self, tables):
@@ -154,7 +156,7 @@ class TestTranslate:
         broken.write_text("{не json", encoding="utf-8")
         try:
             obj = I18n("ru")
-            obj.preload()          # не должно бросить
+            obj.preload()  # не должно бросить
             assert obj.t("btn.record")
         finally:
             broken.unlink(missing_ok=True)

@@ -1,4 +1,5 @@
 """Тесты аудио и распознавания (transcribe.py) — без реальных моделей VOSK."""
+
 from __future__ import annotations
 
 import json
@@ -17,20 +18,20 @@ class FakeRecognizer:
     def __init__(self, *args, **kwargs):
         self._n = 0
 
-    def SetWords(self, flag):  # noqa: N802 - имя как в VOSK
+    def SetWords(self, flag):
         self._words = flag
 
-    def AcceptWaveform(self, data):  # noqa: N802
+    def AcceptWaveform(self, data):
         self._n += 1
         return self._n >= 2
 
-    def Result(self):  # noqa: N802
+    def Result(self):
         return json.dumps({"text": "финальный"})
 
-    def PartialResult(self):  # noqa: N802
+    def PartialResult(self):
         return json.dumps({"partial": "черновой"})
 
-    def FinalResult(self):  # noqa: N802
+    def FinalResult(self):
         return json.dumps({"text": "хвост"})
 
 
@@ -63,7 +64,7 @@ class TestToWav16k:
                 w.setsampwidth(2)
                 w.setframerate(16000)
                 w.writeframes(b"\x00" * 3200)
-            return None
+            return
 
         monkeypatch.setattr(transcribe.shutil, "which", lambda n: "ffmpeg")
         monkeypatch.setattr(transcribe.subprocess, "run", fake_run)
@@ -110,7 +111,7 @@ class TestIterMic:
 
             def read(self, n):
                 self._reads += 1
-                if self._reads > 4:      # иначе тест зациклится
+                if self._reads > 4:  # иначе тест зациклится
                     raise KeyboardInterrupt
                 return (b"\x00" * n * 2), False
 
@@ -149,9 +150,7 @@ class TestIterMic:
         pause = threading.Event()
         pause.set()
         capture = transcribe.Capture()
-        events = list(transcribe.iter_mic(
-            object(), pause_event=pause, capture=capture
-        ))
+        events = list(transcribe.iter_mic(object(), pause_event=pause, capture=capture))
         assert capture.audio_s == 0.0
         assert [e.kind for e in events] == [transcribe.FINAL]
 
@@ -187,7 +186,7 @@ class TestPcmHelpers:
         assert transcribe.pcm_peak(b"\x01\x00\x02") >= 0.0
 
     def test_recognize_pcm(self, patched_vosk):
-        pcm = b"\x00" * 40000        # ~1.2 с
+        pcm = b"\x00" * 40000  # ~1.2 с
         text = transcribe.recognize_pcm(object(), pcm)
         assert "финальный" in text or "хвост" in text
 
@@ -203,8 +202,9 @@ class TestFacadeOutput:
         assert out.is_file()
         assert out.read_text(encoding="utf-8").strip() == result.text
 
-    def test_postprocess_off_keeps_raw(self, make_wav, patched_vosk,
-                                       monkeypatch, tmp_path):
+    def test_postprocess_off_keeps_raw(
+        self, make_wav, patched_vosk, monkeypatch, tmp_path
+    ):
         src = make_wav("speech.wav")
         out = tmp_path / "raw.txt"
         monkeypatch.setattr("dictophone.models.load_model", lambda *a, **k: object())

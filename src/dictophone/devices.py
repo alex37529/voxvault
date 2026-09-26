@@ -3,6 +3,7 @@
 Позволяет перечислить микрофоны и выбрать конкретный по индексу или имени —
 это нужно и для настроек приложения, и для будущего GUI.
 """
+
 from __future__ import annotations
 
 from typing import Optional, Union
@@ -19,9 +20,7 @@ def _sd():
     try:
         import sounddevice as sd
     except ImportError as e:  # pragma: no cover - зависит от окружения
-        raise DeviceError(
-            "sounddevice не установлен: pip install sounddevice"
-        ) from e
+        raise DeviceError("sounddevice не установлен: pip install sounddevice") from e
     return sd
 
 
@@ -49,7 +48,7 @@ def default_input_device() -> Optional[int]:
     sd = _sd()
     try:
         idx = sd.default.device[0]
-    except Exception:
+    except Exception:  # noqa: BLE001 - PortAudio отдаёт что угодно
         return None
     return int(idx) if idx is not None and idx >= 0 else None
 
@@ -73,9 +72,7 @@ def resolve_device(spec: DeviceSpec = None) -> Optional[int]:
         else:
             needle = text.casefold()
             devices = list_input_devices()
-            hit = next(
-                (d for d in devices if needle in d["name"].casefold()), None
-            )
+            hit = next((d for d in devices if needle in d["name"].casefold()), None)
             if hit is None:
                 available = ", ".join(f"{d['index']}:{d['name']}" for d in devices)
                 raise DeviceError(
@@ -85,9 +82,7 @@ def resolve_device(spec: DeviceSpec = None) -> Optional[int]:
 
     devices = list_input_devices()
     if not any(d["index"] == idx for d in devices):
-        raise DeviceError(
-            f"Устройство с индексом {idx} не является входным каналом"
-        )
+        raise DeviceError(f"Устройство с индексом {idx} не является входным каналом")
     return int(idx)
 
 
@@ -103,5 +98,7 @@ def format_devices_table() -> str:
             f" {mark} [{d['index']:>2}] {d['name']}  "
             f"({d['channels']} кан., {d['samplerate']} Гц)"
         )
-    lines.append("\n* — устройство по умолчанию. Выбрать: --device <индекс|фрагмент имени>")
+    lines.append(
+        "\n* — устройство по умолчанию. Выбрать: --device <индекс|фрагмент имени>"
+    )
     return "\n".join(lines)
