@@ -12,8 +12,14 @@ from dictophone.qt_workers import ModelDownloadTask
 
 
 class ModelDownloadDialog(QtWidgets.QDialog):
-    def __init__(self, tr: Callable[..., str], lang: str, size: Optional[str],
-                 model_dir: Path, parent=None):
+    def __init__(
+        self,
+        tr: Callable[..., str],
+        lang: str,
+        size: Optional[str],
+        model_dir: Path,
+        parent=None,
+    ):
         super().__init__(parent)
         self._t = tr
         self._model_dir = model_dir
@@ -71,8 +77,7 @@ class ModelDownloadDialog(QtWidgets.QDialog):
         self.size_box.blockSignals(True)
         self.size_box.clear()
         lang = self.lang_box.currentData()
-        available = [s for s in ("small", "large")
-                     if models.MODELS.get(lang, {}).get(s)]
+        available = [s for s in ("small", "large") if models.MODELS.get(lang, {}).get(s)]
         for value in available:
             self.size_box.addItem(self._t(f"size.{value}"), value)
         index = self.size_box.findData(preferred)
@@ -101,9 +106,7 @@ class ModelDownloadDialog(QtWidgets.QDialog):
             return
         self._stop = threading.Event()
         self._set_downloading(True)
-        task = ModelDownloadTask(
-            self._model_dir, self._lang, self._size, self._stop
-        )
+        task = ModelDownloadTask(self._model_dir, self._lang, self._size, self._stop)
         task.signals.progress.connect(self._on_progress)
         task.signals.done.connect(self._on_done)
         task.signals.failed.connect(self._on_failed)
@@ -129,11 +132,13 @@ class ModelDownloadDialog(QtWidgets.QDialog):
     def _on_progress(self, done: int, total: int) -> None:
         percent = int(done * 100 / total) if total else 0
         self.progress.setValue(percent)
-        self.status.setText(self._t(
-            "models.downloading", lang=self._lang, size=self._size or "-", pct=percent
-        ))
+        self.status.setText(
+            self._t(
+                "models.downloading", lang=self._lang, size=self._size or "-", pct=percent
+            )
+        )
 
-    def _on_done(self, lang: str) -> None:
+    def _on_done(self, lang: str) -> None:  # noqa: ARG002 - обработчик сигнала done(lang)
         self._task = None
         self._stop = None
         self._set_downloading(False)

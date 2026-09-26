@@ -8,6 +8,7 @@
   - spec не включает numpy (проект его не использует);
   - версия для ресурсов exe совпадает с версией пакета.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -74,8 +75,8 @@ class TestSpec:
 
     def test_vosk_and_sounddevice_collected(self):
         text = SPEC.read_text(encoding="utf-8")
-        assert "collect_all(\"vosk\")" in text
-        assert "collect_all(\"sounddevice\")" in text
+        assert 'collect_all("vosk")' in text
+        assert 'collect_all("sounddevice")' in text
 
     def test_certifi_bundled(self):
         """Без cacert.pem скачивание моделей падает с SSL-ошибкой."""
@@ -125,7 +126,7 @@ class TestOnefileRelease:
     def test_zip_contains_single_exe(self, tmp_path, monkeypatch):
         import zipfile
 
-        from dictophone import models as _  # noqa: F401  (проверка импорта)
+        from dictophone import models as _
 
         build = _load_build_module()
         exe = tmp_path / "VoxVault.exe"
@@ -192,7 +193,9 @@ class TestConsoleEncoding:
         env = dict(os.environ, PYTHONIOENCODING="cp1252", PYTHONUTF8="0")
         return subprocess.run(
             [sys.executable, f"packaging/{script}", *args],
-            cwd=str(ROOT), env=env, capture_output=True,
+            cwd=str(ROOT),
+            env=env,
+            capture_output=True,
         )
 
     @pytest.mark.parametrize("script", SCRIPTS)
@@ -235,7 +238,9 @@ class TestConsoleEncoding:
         )
         env = dict(os.environ, PYTHONIOENCODING="cp1252", PYTHONUTF8="0")
         result = subprocess.run(
-            [sys.executable, "-c", code], cwd=str(ROOT), env=env,
+            [sys.executable, "-c", code],
+            cwd=str(ROOT),
+            env=env,
             capture_output=True,
         )
         assert result.returncode == 0, result.stderr.decode("cp1252", "replace")

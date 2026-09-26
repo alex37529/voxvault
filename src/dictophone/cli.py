@@ -6,6 +6,7 @@ config.py (настройки), devices.py (аудиоустройства).
 
 Приоритет значений: встроенные дефолты < файл настроек < аргументы CLI.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -13,24 +14,30 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+from dictophone import __version__, models, storage, transcribe
 from dictophone import config as config_mod
 from dictophone import devices as devices_mod
-from dictophone import models, storage, transcribe
-from dictophone import __version__
 from dictophone.console import setup_console
 
-SIZE_HELP = ("размер модели: small (~50 МБ) | large (~1,8 ГБ); "
-             "по умолчанию — из настроек, иначе авто (приоритет large)")
+SIZE_HELP = (
+    "размер модели: small (~50 МБ) | large (~1,8 ГБ); "
+    "по умолчанию — из настроек, иначе авто (приоритет large)"
+)
 
 
 # ---------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------
 
+
 def _add_model_dir(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--model-dir", type=Path, default=None,
-                   help="каталог моделей (по умолчанию из настроек, "
-                        f"иначе {models.DEFAULT_MODEL_DIR})")
+    p.add_argument(
+        "--model-dir",
+        type=Path,
+        default=None,
+        help="каталог моделей (по умолчанию из настроек, "
+        f"иначе {models.DEFAULT_MODEL_DIR})",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,7 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--version", action="version", version=f"VoxVault {__version__}",
+        "--version",
+        action="version",
+        version=f"VoxVault {__version__}",
         help="показать версию программы и выйти",
     )
     sub = parser.add_subparsers(dest="command")
@@ -52,11 +61,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- история -----------------------------------------------------------
     p_hist = sub.add_parser("history", help="история распознаваний (SQLite)")
-    p_hist.add_argument("--limit", type=int, default=20, help="сколько записей (по умолчанию 20)")
+    p_hist.add_argument(
+        "--limit", type=int, default=20, help="сколько записей (по умолчанию 20)"
+    )
     p_hist.add_argument("--search", default=None, help="поиск подстроки в тексте")
     p_hist.add_argument("--lang", default=None, help="только этот язык")
-    p_hist.add_argument("--kind", choices=["mic", "file"], default=None,
-                        help="только микрофон или только файлы")
+    p_hist.add_argument(
+        "--kind",
+        choices=["mic", "file"],
+        default=None,
+        help="только микрофон или только файлы",
+    )
     p_hist.add_argument("--db", type=Path, default=None, help="путь к базе")
     h_sub = p_hist.add_subparsers(dest="history_cmd")
     p_show = h_sub.add_parser("show", help="показать запись по id")
@@ -71,57 +86,98 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- настройки ---------------------------------------------------------
     p_cfg = sub.add_parser("config", help="показать/изменить настройки")
-    p_cfg.add_argument("--path", type=Path, default=None,
-                       help="где лежит/куда писать файл настроек")
-    p_cfg.add_argument("assignments", nargs="*", metavar="КЛЮЧ=ЗНАЧЕНИЕ",
-                       help="например: config lang=uk size=small "
-                            "(пустое значение сбрасывает: device=)")
-    p_cfg.add_argument("--reset", action="store_true",
-                       help="сбросить настройки к значениям по умолчанию "
-                            "(язык интерфейса и first_run не трогаются)")
-    p_cfg.add_argument("--ask-language", action="store_true",
-                       help="показать выбор языка при следующем запуске")
+    p_cfg.add_argument(
+        "--path", type=Path, default=None, help="где лежит/куда писать файл настроек"
+    )
+    p_cfg.add_argument(
+        "assignments",
+        nargs="*",
+        metavar="КЛЮЧ=ЗНАЧЕНИЕ",
+        help="например: config lang=uk size=small (пустое значение сбрасывает: device=)",
+    )
+    p_cfg.add_argument(
+        "--reset",
+        action="store_true",
+        help="сбросить настройки к значениям по умолчанию "
+        "(язык интерфейса и first_run не трогаются)",
+    )
+    p_cfg.add_argument(
+        "--ask-language",
+        action="store_true",
+        help="показать выбор языка при следующем запуске",
+    )
 
     # --- загрузка моделей --------------------------------------------------
     p_dl = sub.add_parser("download", help="скачать модель VOSK")
     p_dl.add_argument("--lang", default=None, help="язык (по умолчанию ru); список: list")
-    p_dl.add_argument("--size", choices=["small", "large"], default=None,
-                      help="small: ~50 МБ (быстрее), large: точнее")
+    p_dl.add_argument(
+        "--size",
+        choices=["small", "large"],
+        default=None,
+        help="small: ~50 МБ (быстрее), large: точнее",
+    )
     _add_model_dir(p_dl)
 
     # --- файл --------------------------------------------------------------
     p_file = sub.add_parser("file", help="распознать аудиофайл (wav, mp3, m4a, ogg...)")
     p_file.add_argument("audio", type=Path)
     p_file.add_argument("--lang", default=None, help="язык распознавания")
-    p_file.add_argument("--size", choices=["small", "large"], default=None, help=SIZE_HELP)
-    p_file.add_argument("-o", "--output", type=Path, default=None,
-                        help="файл результата (по умолчанию <output_dir>/<имя>.txt)")
-    p_file.add_argument("--output-dir", type=Path, default=None,
-                        help="каталог для результатов")
-    p_file.add_argument("--words", action="store_true",
-                        help="разметка по словам (медленнее, для субтитров)")
-    p_file.add_argument("--no-punct", action="store_true",
-                        help="не расставлять знаки препинания и регистр")
-    p_file.add_argument("--no-history", action="store_true",
-                        help="не сохранять в историю (SQLite)")
+    p_file.add_argument(
+        "--size", choices=["small", "large"], default=None, help=SIZE_HELP
+    )
+    p_file.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="файл результата (по умолчанию <output_dir>/<имя>.txt)",
+    )
+    p_file.add_argument(
+        "--output-dir", type=Path, default=None, help="каталог для результатов"
+    )
+    p_file.add_argument(
+        "--words",
+        action="store_true",
+        help="разметка по словам (медленнее, для субтитров)",
+    )
+    p_file.add_argument(
+        "--no-punct",
+        action="store_true",
+        help="не расставлять знаки препинания и регистр",
+    )
+    p_file.add_argument(
+        "--no-history", action="store_true", help="не сохранять в историю (SQLite)"
+    )
     _add_model_dir(p_file)
 
     # --- микрофон ----------------------------------------------------------
     p_mic = sub.add_parser("mic", help="распознавание с микрофона в реальном времени")
     p_mic.add_argument("--lang", default=None, help="язык распознавания")
     p_mic.add_argument("--size", choices=["small", "large"], default=None, help=SIZE_HELP)
-    p_mic.add_argument("--device", default=None,
-                       help="микрофон: индекс или часть имени (см. devices)")
-    p_mic.add_argument("-o", "--output", type=Path, default=None,
-                       help="файл результата (по умолчанию <output_dir>/mic_<ts>.txt)")
-    p_mic.add_argument("--output-dir", type=Path, default=None,
-                       help="каталог для результатов")
-    p_mic.add_argument("--words", action="store_true",
-                       help="разметка по словам (медленнее)")
-    p_mic.add_argument("--no-punct", action="store_true",
-                       help="не расставлять знаки препинания и регистр")
-    p_mic.add_argument("--no-history", action="store_true",
-                       help="не сохранять в историю (SQLite)")
+    p_mic.add_argument(
+        "--device", default=None, help="микрофон: индекс или часть имени (см. devices)"
+    )
+    p_mic.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="файл результата (по умолчанию <output_dir>/mic_<ts>.txt)",
+    )
+    p_mic.add_argument(
+        "--output-dir", type=Path, default=None, help="каталог для результатов"
+    )
+    p_mic.add_argument(
+        "--words", action="store_true", help="разметка по словам (медленнее)"
+    )
+    p_mic.add_argument(
+        "--no-punct",
+        action="store_true",
+        help="не расставлять знаки препинания и регистр",
+    )
+    p_mic.add_argument(
+        "--no-history", action="store_true", help="не сохранять в историю (SQLite)"
+    )
     _add_model_dir(p_mic)
 
     return parser
@@ -130,6 +186,7 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 # Настройки
 # ---------------------------------------------------------------------------
+
 
 def _resolve(
     args: argparse.Namespace,
@@ -154,6 +211,7 @@ def _output_path(args: argparse.Namespace, cfg: config_mod.Config, stem: str) ->
 # ---------------------------------------------------------------------------
 # Роутинг
 # ---------------------------------------------------------------------------
+
 
 def _cmd_list(args: argparse.Namespace, cfg: config_mod.Config) -> None:
     print(models.format_models_table())
@@ -197,18 +255,15 @@ def _cmd_config(args: argparse.Namespace, cfg: config_mod.Config) -> None:
         updates: dict[str, Any] = {}
         for item in args.assignments:
             if "=" not in item:
-                raise SystemExit(
-                    f"Ожидался формат КЛЮЧ=ЗНАЧЕНИЕ, получено: {item!r}"
-                )
+                raise SystemExit(f"Ожидался формат КЛЮЧ=ЗНАЧЕНИЕ, получено: {item!r}")
             key, _, value = item.partition("=")
             updates[key.strip()] = value.strip()
 
-        if "lang" in updates and updates["lang"]:
-            if updates["lang"].lower() not in models.MODELS:
-                raise SystemExit(
-                    f"Неизвестный язык {updates['lang']!r}. "
-                    f"Доступны: {', '.join(models.known_langs())}"
-                )
+        lang = updates.get("lang")
+        if lang and lang.lower() not in models.MODELS:
+            raise SystemExit(
+                f"Неизвестный язык {lang!r}. Доступны: {', '.join(models.known_langs())}"
+            )
 
         current, saved = config_mod.set_values(
             config_mod.load_config(path), updates, path
@@ -233,7 +288,7 @@ def _cmd_gui(args: argparse.Namespace, cfg: config_mod.Config) -> None:
 def _cmd_gui_qt(args: argparse.Namespace, cfg: config_mod.Config) -> None:
     try:
         from dictophone import gui_qt
-    except ImportError as e:
+    except ImportError:
         raise SystemExit(
             "Не установлен PySide6-Essentials.\n"
             "Установите: py -m pip install PySide6-Essentials"
@@ -254,8 +309,10 @@ def _cmd_history(args: argparse.Namespace, cfg: config_mod.Config) -> None:
             row = db.get(args.id)
             if row is None:
                 raise SystemExit(f"Запись #{args.id} не найдена")
-            print(f"#{row['id']}  {row['created_at']}  {row['kind']}  "
-                  f"язык={row['lang'] or '?'}  {row['audio_s'] or 0:.1f} c")
+            print(
+                f"#{row['id']}  {row['created_at']}  {row['kind']}  "
+                f"язык={row['lang'] or '?'}  {row['audio_s'] or 0:.1f} c"
+            )
             if row["source"]:
                 print(f"источник: {row['source']}")
             if row["output_path"]:
@@ -274,9 +331,7 @@ def _cmd_history(args: argparse.Namespace, cfg: config_mod.Config) -> None:
         if sub == "clear":
             if not args.yes:
                 total = db.count()
-                raise SystemExit(
-                    f"В истории {total} записей. Для очистки добавьте --yes"
-                )
+                raise SystemExit(f"В истории {total} записей. Для очистки добавьте --yes")
             removed = db.clear()
             print(f"Удалено записей: {removed}")
             return
@@ -318,17 +373,19 @@ def _save_history(
         return
     try:
         with _db(args, cfg) as db:
-            db.add(storage.Entry(
-                kind=kind,
-                text=result.text,
-                lang=result.lang,
-                source=str(source) if source else None,
-                model_size=size or "auto",
-                model_name=model_name,
-                device=str(device) if device is not None else None,
-                audio_s=result.audio_s,
-                output_path=str(output) if output else None,
-            ))
+            db.add(
+                storage.Entry(
+                    kind=kind,
+                    text=result.text,
+                    lang=result.lang,
+                    source=str(source) if source else None,
+                    model_size=size or "auto",
+                    model_name=model_name,
+                    device=str(device) if device is not None else None,
+                    audio_s=result.audio_s,
+                    output_path=str(output) if output else None,
+                )
+            )
     except Exception as e:  # noqa: BLE001 - история не должна ломать распознавание
         print(f"(!) не удалось сохранить в историю: {e}")
 
@@ -358,8 +415,15 @@ def _cmd_file(args: argparse.Namespace, cfg: config_mod.Config) -> None:
         words=args.words,
         postprocess=_postprocess_mode(args, cfg),
     )
-    _save_history(args, cfg, kind="file", result=result, output=output,
-                  source=Path(args.audio), size=size)
+    _save_history(
+        args,
+        cfg,
+        kind="file",
+        result=result,
+        output=output,
+        source=Path(args.audio),
+        size=size,
+    )
 
 
 def _cmd_mic(args: argparse.Namespace, cfg: config_mod.Config) -> None:
@@ -384,8 +448,9 @@ def _cmd_mic(args: argparse.Namespace, cfg: config_mod.Config) -> None:
         words=args.words,
         postprocess=_postprocess_mode(args, cfg),
     )
-    _save_history(args, cfg, kind="mic", result=result, output=output,
-                  size=size, device=device)
+    _save_history(
+        args, cfg, kind="mic", result=result, output=output, size=size, device=device
+    )
 
 
 _COMMANDS = {

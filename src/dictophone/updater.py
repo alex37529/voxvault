@@ -15,6 +15,7 @@
 Модуль ничего не печатает и не трогает Qt: чистые функции разбора отделены
 от сети, поэтому тестируются без интернета.
 """
+
 from __future__ import annotations
 
 import re
@@ -129,7 +130,9 @@ def is_due(last_check: Optional[float], now: Optional[float] = None) -> bool:
         return True
     import time
 
-    return (now if now is not None else time.time()) - float(last_check) >= CHECK_INTERVAL_S
+    return (now if now is not None else time.time()) - float(
+        last_check
+    ) >= CHECK_INTERVAL_S
 
 
 def _get_json(url: str, timeout: float) -> Any:
@@ -153,7 +156,7 @@ def _get_json(url: str, timeout: float) -> Any:
     except Exception as e:  # noqa: BLE001 - сеть отдаёт что угодно
         raise UpdateError(str(e)) from None
     if response.status_code == 404:
-        return None               # релизов ещё не было — обновлений нет
+        return None  # релизов ещё не было — обновлений нет
     if response.status_code in (403, 429):
         raise UpdateError("GitHub временно не отвечает (лимит запросов)")
     if response.status_code != 200:

@@ -8,6 +8,7 @@ GUI: потребитель читает генератор в своём пот
 Зависимости: models.load_model, postprocess, vosk, sounddevice (микрофон),
 ffmpeg (только для не-WAV).
 """
+
 from __future__ import annotations
 
 import json
@@ -19,7 +20,7 @@ import threading
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, Optional, Sequence
+from typing import Iterator, Optional
 
 SAMPLE_RATE = 16000
 BLOCK_SAMPLES = 6000  # ~0.4 с при 16 кГц — кадр для realtime
@@ -73,6 +74,7 @@ class Result:
 # Аудио-утилиты
 # ---------------------------------------------------------------------------
 
+
 def to_wav_16k(src: Path) -> Path:
     """Вернуть путь к wav 16 кГц mono int16.
 
@@ -101,9 +103,21 @@ def to_wav_16k(src: Path) -> Path:
 
     tmp = Path(tempfile.gettempdir()) / f"{src.stem}_dictophone_16k.wav"
     subprocess.run(
-        [ffmpeg, "-y", "-i", str(src),
-         "-ar", str(SAMPLE_RATE), "-ac", "1", "-sample_fmt", "s16",
-         "-f", "wav", str(tmp)],
+        [
+            ffmpeg,
+            "-y",
+            "-i",
+            str(src),
+            "-ar",
+            str(SAMPLE_RATE),
+            "-ac",
+            "1",
+            "-sample_fmt",
+            "s16",
+            "-f",
+            "wav",
+            str(tmp),
+        ],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -130,6 +144,7 @@ def wav_duration_s(wav_path: Path) -> float:
 # Распознавание файла
 # ---------------------------------------------------------------------------
 
+
 def recognize_file(model, wav_path: Path, words: bool = True) -> Result:
     """Ядро распознавания файла: текст + длительность + средняя уверенность.
 
@@ -150,7 +165,7 @@ def recognize_file(model, wav_path: Path, words: bool = True) -> Result:
 
     segments: list[str] = []
     for i in range(0, len(pcm), FILE_CHUNK_BYTES):
-        if rec.AcceptWaveform(pcm[i:i + FILE_CHUNK_BYTES]):
+        if rec.AcceptWaveform(pcm[i : i + FILE_CHUNK_BYTES]):
             text = _take_result(rec, cap)
             if text:
                 segments.append(text)
@@ -190,7 +205,7 @@ def recognize_pcm(model, pcm: bytes, sample_rate: int = SAMPLE_RATE) -> str:
     rec.SetWords(True)
     parts: list[str] = []
     for i in range(0, len(pcm), FILE_CHUNK_BYTES):
-        if rec.AcceptWaveform(pcm[i:i + FILE_CHUNK_BYTES]):
+        if rec.AcceptWaveform(pcm[i : i + FILE_CHUNK_BYTES]):
             text = _take_result(rec)
             if text:
                 parts.append(text)
@@ -240,6 +255,7 @@ def detect_language(
 # Микрофон: поток событий
 # ---------------------------------------------------------------------------
 
+
 def iter_mic(
     model,
     *,
@@ -273,8 +289,11 @@ def iter_mic(
 
     last_partial = ""
     with sd.RawInputStream(
-        samplerate=sample_rate, blocksize=block,
-        dtype="int16", channels=1, device=device,
+        samplerate=sample_rate,
+        blocksize=block,
+        dtype="int16",
+        channels=1,
+        device=device,
     ) as stream:
         while stop_event is None or not stop_event.is_set():
             try:
@@ -313,7 +332,7 @@ def _clear_line() -> None:
         if sys.stdout.isatty():
             sys.stdout.write("\r\033[K")
             sys.stdout.flush()
-    except Exception:
+    except Exception:  # noqa: BLE001 - stdout может быть перенаправлен
         pass
 
 
@@ -330,8 +349,12 @@ def transcribe_mic(
     """CLI-обёртка над iter_mic: печатает live-текст, возвращает результат."""
     parts: list[str] = []
     for event in iter_mic(
-        model, device=device, stop_event=stop_event,
-        pause_event=pause_event, words=words, capture=capture,
+        model,
+        device=device,
+        stop_event=stop_event,
+        pause_event=pause_event,
+        words=words,
+        capture=capture,
     ):
         if on_event is not None:
             on_event(event)
@@ -349,6 +372,7 @@ def transcribe_mic(
 # Фасад: «даны файл/микрофон → Result»
 # ---------------------------------------------------------------------------
 
+
 def transcribe(
     source: Optional[Path] = None,
     *,
@@ -365,7 +389,8 @@ def transcribe(
     lang='auto' — определить язык файла, перебрав установленные модели.
     Возвращает Result; при заданном output текст пишется в файл.
     """
-    from dictophone import models, postprocess as pp
+    from dictophone import models
+    from dictophone import postprocess as pp
 
     if model_dir is None:
         model_dir = models.DEFAULT_MODEL_DIR
@@ -374,11 +399,8 @@ def transcribe(
     if source is None:
         model = models.load_model(model_dir, lang, size)
         capture = Capture()
-        print("Слушаю микрофон. Говорите. Ctrl+C — остановка и сохранение.",
-              flush=True)
-        raw = transcribe_mic(
-            model, device=device, words=words, capture=capture
-        )
+        print("Слушаю микрофон. Говорите. Ctrl+C — остановка и сохранение.", flush=True)
+        raw = transcribe_mic(model, device=device, words=words, capture=capture)
         result = Result(
             text=processor.apply(raw, capture.segments),
             audio_s=capture.audio_s,

@@ -11,6 +11,7 @@
 Тот же код собирает `packaging/assets/VoxVault.ico` — ресурс exe, который
 Windows показывает в проводнике и на панели задач.
 """
+
 from __future__ import annotations
 
 import struct
@@ -69,16 +70,15 @@ def _paint(size: int) -> QtGui.QImage:
     painter = QtGui.QPainter(image)
     painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
 
-    gradient = QtGui.QLinearGradient(
-        QtCore.QPointF(0, 0), QtCore.QPointF(0, size)
-    )
+    gradient = QtGui.QLinearGradient(QtCore.QPointF(0, 0), QtCore.QPointF(0, size))
     gradient.setColorAt(0.0, QtGui.QColor(_BRAND_TOP))
     gradient.setColorAt(1.0, QtGui.QColor(_BRAND_BOTTOM))
     painter.setPen(QtCore.Qt.PenStyle.NoPen)
     painter.setBrush(gradient)
     painter.drawRoundedRect(
         QtCore.QRectF(size * 0.04, size * 0.04, size * 0.92, size * 0.92),
-        size * 0.22, size * 0.22,
+        size * 0.22,
+        size * 0.22,
     )
 
     pen = QtGui.QPen(QtGui.QColor(_GLYPH))
@@ -90,12 +90,13 @@ def _paint(size: int) -> QtGui.QImage:
     body_w, body_h = size * 0.26, size * 0.42
     painter.drawRoundedRect(
         QtCore.QRectF(cx - body_w / 2, cy - body_h / 2, body_w, body_h),
-        body_w / 2, body_w / 2,
+        body_w / 2,
+        body_w / 2,
     )
     painter.drawArc(
-        QtCore.QRectF(cx - size * 0.30, cy - size * 0.10,
-                      size * 0.60, size * 0.60),
-        0, 180 * 16,
+        QtCore.QRectF(cx - size * 0.30, cy - size * 0.10, size * 0.60, size * 0.60),
+        0,
+        180 * 16,
     )
     painter.drawLine(
         QtCore.QPointF(cx, cy + size * 0.22), QtCore.QPointF(cx, cy + size * 0.32)
@@ -116,8 +117,10 @@ def _render(size: int) -> QtGui.QPixmap:
 def _png(size: int) -> bytes:
     buffer = QtCore.QBuffer()
     buffer.open(QtCore.QIODevice.OpenModeFlag.WriteOnly)
-    _paint(size).save(buffer, "PNG")
-    return bytes(buffer.data())
+    # Заглушки PySide6 строже реальности: save() описан только для str-формата,
+    # а bytes(QByteArray) в типах не объявлен. На практике оба вызова верны.
+    _paint(size).save(buffer, "PNG")  # type: ignore[call-overload]
+    return bytes(buffer.data())  # type: ignore[call-overload]
 
 
 @lru_cache(maxsize=1)
@@ -146,7 +149,12 @@ def ico_bytes(sizes: tuple[int, ...] = ICON_SIZES) -> bytes:
             "<BBBBHHII",
             0 if size >= 256 else size,
             0 if size >= 256 else size,
-            0, 0, 1, 32, len(data), offset,
+            0,
+            0,
+            1,
+            32,
+            len(data),
+            offset,
         )
         blobs += data
         offset += len(data)

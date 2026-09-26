@@ -5,22 +5,28 @@
 deleted»: если окно закрылось раньше, чем задача завершилась, таск молча
 выходит, а не падает.
 """
+
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from PySide6 import QtCore
 
 from dictophone import models, updater
 
+if TYPE_CHECKING:  # только для типов, в рантайме модуль не нужен
+    from dictophone.transcribe import Capture
+
 
 class LoadSignals(QtCore.QObject):
     """Сигналы загрузчика модели."""
-    phase = QtCore.Signal(str, float)     # (фаза, прошло секунд)
-    ready = QtCore.Signal(object)          # готовая модель
+
+    phase = QtCore.Signal(str, float)  # (фаза, прошло секунд)
+    ready = QtCore.Signal(object)  # готовая модель
     failed = QtCore.Signal(str)
 
 
@@ -31,8 +37,9 @@ class LoadTask(QtCore.QRunnable):
     молча качать 1.8 ГБ при старте приложения.
     """
 
-    def __init__(self, model_dir: Path, lang: str, size: Optional[str],
-                 auto_download: bool = True):
+    def __init__(
+        self, model_dir: Path, lang: str, size: Optional[str], auto_download: bool = True
+    ):
         super().__init__()
         self.signals = LoadSignals()
         self._model_dir = model_dir
@@ -57,7 +64,9 @@ class LoadTask(QtCore.QRunnable):
     def run(self) -> None:  # pragma: no cover - требует реальной модели
         try:
             model = models.load_model(
-                self._model_dir, self._lang, self._size,
+                self._model_dir,
+                self._lang,
+                self._size,
                 auto_download=self._auto_download,
                 progress_cb=lambda p, e: self._emit(self.signals.phase, p, e),
             )
@@ -70,23 +79,32 @@ class LoadTask(QtCore.QRunnable):
 
 class MicSignals(QtCore.QObject):
     """Сигналы распознавания с микрофона."""
-    event = QtCore.Signal(str, str)        # (kind, text)
-    finished = QtCore.Signal(object)       # Capture
+
+    # Имя НЕ `event`: у QObject есть виртуальный метод event(), и сигнал с
+    # таким именем перекрыл бы его — Qt перестал бы доставлять объекту
+    # события (в том числе deleteLater при закрытии окна).
+    recognized = QtCore.Signal(str, str)  # (kind, text)
+    finished = QtCore.Signal(object)  # Capture
     failed = QtCore.Signal(str)
 
 
 class MicTask(QtCore.QRunnable):
     """Распознавание с микрофона в фоне; остановка — через stop_event."""
 
-    def __init__(self, model, device: Optional[int], stop: threading.Event,
-                 pause: Optional[threading.Event] = None):
+    def __init__(
+        self,
+        model,
+        device: Optional[int],
+        stop: threading.Event,
+        pause: Optional[threading.Event] = None,
+    ):
         super().__init__()
         self.signals = MicSignals()
         self._model = model
         self._device = device
         self._stop = stop
         self._pause = pause
-        self.capture = None
+        self.capture: Optional[Capture] = None
 
     def run(self) -> None:  # pragma: no cover - требует микрофона
         from dictophone import transcribe
@@ -95,30 +113,29 @@ class MicTask(QtCore.QRunnable):
         self.capture = capture
         try:
             for ev in transcribe.iter_mic(
-                self._model, device=self._device,
-                stop_event=self._stop, pause_event=self._pause,
+                self._model,
+                device=self._device,
+                stop_event=self._stop,
+                pause_event=self._pause,
                 capture=capture,
             ):
                 try:
-                    self.signals.event.emit(ev.kind, ev.text)
+                    self.signals.recognized.emit(ev.kind, ev.text)
                 except RuntimeError:
                     return
             self.signals.finished.emit(capture)
         except SystemExit as e:
-            try:
+            with contextlib.suppress(RuntimeError):
                 self.signals.failed.emit(str(e))
-            except RuntimeError:
-                pass
         except Exception as e:  # noqa: BLE001
-            try:
+            with contextlib.suppress(RuntimeError):
                 self.signals.failed.emit(f"{type(e).__name__}: {e}")
-            except RuntimeError:
-                pass
 
 
 class MicTestSignals(QtCore.QObject):
     """Сигналы проверки микрофона."""
-    result = QtCore.Signal(str)      # (текст + уровень)
+
+    result = QtCore.Signal(str)  # (текст + уровень)
     failed = QtCore.Signal(str)
 
 
@@ -149,8 +166,11 @@ class MicTestTask(QtCore.QRunnable):
             block = transcribe.BLOCK_SAMPLES
             frames = int(rate * self._seconds)
             with sd.RawInputStream(
-                samplerate=rate, blocksize=block, dtype="int16",
-                channels=1, device=self._device,
+                samplerate=rate,
+                blocksize=block,
+                dtype="int16",
+                channels=1,
+                device=self._device,
             ) as stream:
                 chunks: list[bytes] = []
                 got = 0
@@ -177,7 +197,7 @@ class MicTestTask(QtCore.QRunnable):
 class UpdateCheckSignals(QtCore.QObject):
     """Сигналы проверки обновлений."""
 
-    done = QtCore.Signal(object)      # updater.Release | None
+    done = QtCore.Signal(object)  # updater.Release | None
     failed = QtCore.Signal(str)
 
 
@@ -198,21 +218,18 @@ class UpdateCheckTask(QtCore.QRunnable):
         try:
             release = updater.fetch_latest(self.current_version, self.timeout)
         except Exception as e:  # noqa: BLE001 - сеть отдаёт что угодно
-            try:
+            with contextlib.suppress(RuntimeError):
                 self.signals.failed.emit(str(e))
-            except RuntimeError:
-                pass
         else:
-            try:
+            with contextlib.suppress(RuntimeError):
                 self.signals.done.emit(release)
-            except RuntimeError:
-                pass
 
 
 class ModelDownloadSignals(QtCore.QObject):
     """Сигналы фонового скачивания модели."""
-    progress = QtCore.Signal(int, int)     # (скачано, всего)
-    done = QtCore.Signal(str)               # язык
+
+    progress = QtCore.Signal(int, int)  # (скачано, всего)
+    done = QtCore.Signal(str)  # язык
     failed = QtCore.Signal(str)
     cancelled = QtCore.Signal()
 
@@ -224,8 +241,7 @@ class ModelDownloadTask(QtCore.QRunnable):
     проценты (в отличие от загрузки модели в память, где VOSK молчит).
     """
 
-    def __init__(self, model_dir: Path, lang: str, size: str,
-                 stop: threading.Event):
+    def __init__(self, model_dir: Path, lang: str, size: str, stop: threading.Event):
         super().__init__()
         self.signals = ModelDownloadSignals()
         self.model_dir = model_dir
@@ -237,7 +253,9 @@ class ModelDownloadTask(QtCore.QRunnable):
     def run(self) -> None:  # pragma: no cover - требует сети
         try:
             models.download_model(
-                self.lang, self.size, self.model_dir,
+                self.lang,
+                self.size,
+                self.model_dir,
                 progress_cb=self.signals.progress.emit,
                 stop_event=self.stop_event,
             )

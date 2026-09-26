@@ -3,6 +3,7 @@
 Отдельный модуль, чтобы «внутряки» не жили в CLI (main.py).
 Все функции идемпотентны: повторный вызов не перезаписывает уже установленное.
 """
+
 from __future__ import annotations
 
 import os
@@ -51,39 +52,45 @@ MODELS_BASE = "https://alphacephei.com/vosk/models"
 # Имена взяты со страницы https://alphacephei.com/vosk/models.
 # Версии у каждого языка свои — фиксированный шаблон под них не уйдёт.
 MODELS: dict[str, dict[str, Optional[str]]] = {
-    "ru":    {"small": "vosk-model-small-ru-0.22",  "large": "vosk-model-ru-0.42"},
+    "ru": {"small": "vosk-model-small-ru-0.22", "large": "vosk-model-ru-0.42"},
     "en-us": {"small": "vosk-model-small-en-us-0.15", "large": "vosk-model-en-us-0.22"},
     "en-in": {"small": "vosk-model-small-en-in-0.4", "large": "vosk-model-en-in-0.5"},
-    "cn":    {"small": "vosk-model-small-cn-0.22",  "large": "vosk-model-cn-0.22"},
-    "uk":    {"small": "vosk-model-small-uk-v3-nano", "large": "vosk-model-uk-v3"},
-    "fr":    {"small": "vosk-model-small-fr-0.22",  "large": "vosk-model-fr-0.22"},
-    "de":    {"small": "vosk-model-small-de-0.15",  "large": "vosk-model-de-0.21"},
-    "es":    {"small": "vosk-model-small-es-0.42",  "large": "vosk-model-es-0.42"},
-    "it":    {"small": "vosk-model-small-it-0.22",  "large": "vosk-model-it-0.22"},
-    "pt":    {"small": "vosk-model-small-pt-0.3",   "large": "vosk-model-pt-fb-v0.1.1-20220516_2113"},
-    "pl":    {"small": "vosk-model-small-pl-0.22",  "large": None},
-    "nl":    {"small": "vosk-model-small-nl-0.22",  "large": "vosk-model-nl-spraakherkenning-0.6"},
-    "tr":    {"small": "vosk-model-small-tr-0.3",   "large": None},
-    "fa":    {"small": "vosk-model-small-fa-0.42",  "large": "vosk-model-fa-0.42"},
-    "hi":    {"small": "vosk-model-small-hi-0.22",  "large": "vosk-model-hi-0.22"},
-    "el-gr": {"small": None,      "large": "vosk-model-el-gr-0.7"},
-    "ar":    {"small": None,      "large": "vosk-model-ar-mgb2-0.4"},
-    "vn":    {"small": "vosk-model-small-vn-0.4",   "large": "vosk-model-vn-0.4"},
-    "ja":    {"small": "vosk-model-small-ja-0.22",  "large": "vosk-model-ja-0.22"},
-    "ko":    {"small": "vosk-model-small-ko-0.22",  "large": None},
-    "cs":    {"small": "vosk-model-small-cs-0.4-rhasspy", "large": None},
-    "sv":    {"small": "vosk-model-small-sv-rhasspy-0.15", "large": None},
-    "kz":    {"small": "vosk-model-small-kz-0.42",  "large": "vosk-model-kz-0.42"},
-    "ky":    {"small": "vosk-model-small-ky-0.42",  "large": "vosk-model-ky-0.42"},
-    "uz":    {"small": "vosk-model-small-uz-0.22",  "large": None},
-    "tg":    {"small": "vosk-model-small-tg-0.22",  "large": "vosk-model-tg-0.22"},
-    "ka":    {"small": "vosk-model-small-ka-0.42",  "large": "vosk-model-ka-0.42"},
-    "gu":    {"small": "vosk-model-small-gu-0.42",  "large": "vosk-model-gu-0.42"},
-    "te":    {"small": "vosk-model-small-te-0.42",  "large": None},
-    "ca":    {"small": "vosk-model-small-ca-0.4",   "large": None},
-    "eo":    {"small": "vosk-model-small-eo-0.42",  "large": None},
-    "br":    {"small": None,      "large": "vosk-model-br-0.8"},
-    "tl-ph": {"small": None,      "large": "vosk-model-tl-ph-generic-0.6"},
+    "cn": {"small": "vosk-model-small-cn-0.22", "large": "vosk-model-cn-0.22"},
+    "uk": {"small": "vosk-model-small-uk-v3-nano", "large": "vosk-model-uk-v3"},
+    "fr": {"small": "vosk-model-small-fr-0.22", "large": "vosk-model-fr-0.22"},
+    "de": {"small": "vosk-model-small-de-0.15", "large": "vosk-model-de-0.21"},
+    "es": {"small": "vosk-model-small-es-0.42", "large": "vosk-model-es-0.42"},
+    "it": {"small": "vosk-model-small-it-0.22", "large": "vosk-model-it-0.22"},
+    "pt": {
+        "small": "vosk-model-small-pt-0.3",
+        "large": "vosk-model-pt-fb-v0.1.1-20220516_2113",
+    },
+    "pl": {"small": "vosk-model-small-pl-0.22", "large": None},
+    "nl": {
+        "small": "vosk-model-small-nl-0.22",
+        "large": "vosk-model-nl-spraakherkenning-0.6",
+    },
+    "tr": {"small": "vosk-model-small-tr-0.3", "large": None},
+    "fa": {"small": "vosk-model-small-fa-0.42", "large": "vosk-model-fa-0.42"},
+    "hi": {"small": "vosk-model-small-hi-0.22", "large": "vosk-model-hi-0.22"},
+    "el-gr": {"small": None, "large": "vosk-model-el-gr-0.7"},
+    "ar": {"small": None, "large": "vosk-model-ar-mgb2-0.4"},
+    "vn": {"small": "vosk-model-small-vn-0.4", "large": "vosk-model-vn-0.4"},
+    "ja": {"small": "vosk-model-small-ja-0.22", "large": "vosk-model-ja-0.22"},
+    "ko": {"small": "vosk-model-small-ko-0.22", "large": None},
+    "cs": {"small": "vosk-model-small-cs-0.4-rhasspy", "large": None},
+    "sv": {"small": "vosk-model-small-sv-rhasspy-0.15", "large": None},
+    "kz": {"small": "vosk-model-small-kz-0.42", "large": "vosk-model-kz-0.42"},
+    "ky": {"small": "vosk-model-small-ky-0.42", "large": "vosk-model-ky-0.42"},
+    "uz": {"small": "vosk-model-small-uz-0.22", "large": None},
+    "tg": {"small": "vosk-model-small-tg-0.22", "large": "vosk-model-tg-0.22"},
+    "ka": {"small": "vosk-model-small-ka-0.42", "large": "vosk-model-ka-0.42"},
+    "gu": {"small": "vosk-model-small-gu-0.42", "large": "vosk-model-gu-0.42"},
+    "te": {"small": "vosk-model-small-te-0.42", "large": None},
+    "ca": {"small": "vosk-model-small-ca-0.4", "large": None},
+    "eo": {"small": "vosk-model-small-eo-0.42", "large": None},
+    "br": {"small": None, "large": "vosk-model-br-0.8"},
+    "tl-ph": {"small": None, "large": "vosk-model-tl-ph-generic-0.6"},
 }
 
 
@@ -98,6 +105,7 @@ class DownloadCancelled(Exception):
 # ---------------------------------------------------------------------------
 # Реестр
 # ---------------------------------------------------------------------------
+
 
 def known_langs() -> list[str]:
     """Отсортированный список установленных языков реестра."""
@@ -147,6 +155,7 @@ def format_models_table() -> str:
 # ---------------------------------------------------------------------------
 # Файловая система
 # ---------------------------------------------------------------------------
+
 
 def _lang_matches(name: str, lang: str) -> bool:
     """Совпадает ли каталог модели с языком — ТОЛЬКО по именам из реестра.
@@ -205,9 +214,11 @@ def find_model(
             all_ok = [e for e in all_ok if "small" not in e.name]
         if not all_ok:
             return None
+
     # large (non-small) точнее — при равенстве приоритет у него
     def _key(e: Path):
         return (1 if "small" not in e.name else 0, e.name)
+
     return sorted(all_ok, key=_key)[-1]
 
 
@@ -226,8 +237,6 @@ def download_model(
     progress_cb(downloaded_bytes, total_bytes) — для GUI; None → печать в stdout.
     stop_event — threading.Event: установлен -> отмена, .part удаляется.
     """
-    import requests  # lazy: не нужен если модель уже скачана
-    import zipfile
 
     url = model_url(lang, size)
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -301,15 +310,13 @@ def _fetch_archive(
                 sys.stdout.write("\n")
                 sys.stdout.flush()
             if total and downloaded != total:
-                raise OSError(
-                    f"скачано {downloaded} байт, ожидалось {total} — обрыв"
-                )
+                raise OSError(f"скачано {downloaded} байт, ожидалось {total} — обрыв")
             if downloaded == 0:
                 raise OSError("пустой ответ сервера")
             return
         except DownloadCancelled:
-            raise                     # отмена — не повторять
-        except Exception as e:          # noqa: BLE001 - ловим и сети, и HTTP
+            raise  # отмена — не повторять
+        except Exception as e:  # noqa: BLE001 - ловим и сети, и HTTP
             last_error = e
             dest.unlink(missing_ok=True)
             if attempt < attempts:
@@ -348,8 +355,11 @@ def installed_langs(model_dir: Path = DEFAULT_MODEL_DIR) -> list[str]:
     """Языки, для которых в каталоге есть хотя бы одна ASR-модель."""
     if not Path(model_dir).is_dir():
         return []
-    present = {e.name for e in Path(model_dir).iterdir()
-               if _is_model_dir(e) and "recasepunc" not in e.name}
+    present = {
+        e.name
+        for e in Path(model_dir).iterdir()
+        if _is_model_dir(e) and "recasepunc" not in e.name
+    }
     found = []
     for lang in MODELS:
         names = {n for n in MODELS[lang].values() if n}
@@ -388,9 +398,7 @@ def validate_model_dir(path: Path) -> list[str]:
     path = Path(path)
     missing = [rel for rel in REQUIRED_MODEL_FILES if not (path / rel).exists()]
     missing += [
-        pattern
-        for pattern in REQUIRED_MODEL_GLOBS
-        if not any(path.glob(pattern))
+        pattern for pattern in REQUIRED_MODEL_GLOBS if not any(path.glob(pattern))
     ]
     return missing
 
@@ -472,9 +480,9 @@ def archive_size_mb(lang: str, size: str) -> Optional[int]:
 # ---------------------------------------------------------------------------
 
 #: Фазы загрузки модели — их получает progress_cb.
-PHASE_CHECKING = "checking"   # поиск папки, проверка файлов — мгновенно
-PHASE_LOADING = "loading"     # чтение модели в память — долго (large: 60-90 с)
-PHASE_READY = "ready"         # модель готова, можно говорить
+PHASE_CHECKING = "checking"  # поиск папки, проверка файлов — мгновенно
+PHASE_LOADING = "loading"  # чтение модели в память — долго (large: 60-90 с)
+PHASE_READY = "ready"  # модель готова, можно говорить
 
 
 def _load_with_progress(model_path: Path, on_tick=None):
@@ -548,6 +556,7 @@ def load_model(
     чтобы не было ERROR в stderr.
     """
     from vosk import SetLogLevel
+
     SetLogLevel(-1)  # тишина: подавить C-level VOSK messages
 
     def notify(phase: str, elapsed: float = 0.0) -> None:
@@ -624,6 +633,8 @@ def make_ascii_junction(model_dir: Path) -> Path:
 
     subprocess.run(
         ["cmd", "/c", "mklink", "/J", str(dest), str(src)],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     return dest

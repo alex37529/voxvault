@@ -4,6 +4,7 @@
 Если они разойдутся (потеряется раздел, команда, язык в таблице), это будет
 незаметно для разработчика, но заметно для пользователя — поэтому проверяем.
 """
+
 from __future__ import annotations
 
 import os
@@ -44,8 +45,7 @@ ALLOWED_CYRILLIC = {"Русский", "диктофон"}
 
 @pytest.fixture(scope="module")
 def texts():
-    return {code: path.read_text(encoding="utf-8")
-            for code, path in README_FILES.items()}
+    return {code: path.read_text(encoding="utf-8") for code, path in README_FILES.items()}
 
 
 class TestLanguageSwitch:
@@ -63,8 +63,9 @@ class TestLanguageSwitch:
         for code, text in texts.items():
             here = README_FILES[code].parent
             links = re.findall(r"\[([^\]]+)\]\(([^)]+\.md)\)", text)
-            targets = {os.path.normpath(str((here / target).resolve()))
-                       for _, target in links}
+            targets = {
+                os.path.normpath(str((here / target).resolve())) for _, target in links
+            }
             for other, path in README_FILES.items():
                 if other == code:
                     continue
@@ -81,9 +82,7 @@ class TestLanguageSwitch:
                 if target.startswith(("http://", "https://")):
                     continue
                 resolved = (here / target).resolve()
-                assert resolved.exists(), (
-                    f"README {code}: битая ссылка {target}"
-                )
+                assert resolved.exists(), f"README {code}: битая ссылка {target}"
 
     def test_screenshot_next_to_translated_readmes(self, texts):
         """Переводы лежат в docs/, поэтому скриншот у них рядом — `screen.png`."""
@@ -151,8 +150,15 @@ class TestHeroSection:
     """Шапка README: бейджи и скриншот приложения."""
 
     #: Бейджи, которые обязаны быть в каждой версии.
-    REQUIRED_BADGES = ("license-Apache--2.0", "version-", "Windows%20x64",
-                       "python-3.9", "PySide6", "VOSK", "offline")
+    REQUIRED_BADGES = (
+        "license-Apache--2.0",
+        "version-",
+        "Windows%20x64",
+        "python-3.9",
+        "PySide6",
+        "VOSK",
+        "offline",
+    )
 
     def test_screenshot_file_exists(self):
         assert SCREENSHOT.exists(), "нет docs/screen.png"
@@ -205,7 +211,8 @@ class TestHeroSection:
             here = README_FILES[code].parent
             href = re.search(
                 r'<a href="([^"]+)"><img[^>]+src="https://img\.shields\.io'
-                r'/badge/license-', text
+                r"/badge/license-",
+                text,
             )
             assert href, f"README {code}: нет бейджа лицензии"
             assert (here / href.group(1)).resolve() == LICENSE.resolve(), (
@@ -229,17 +236,13 @@ class TestRecognitionLanguages:
         ограничения они попадали бы сюда.
         """
         lines = text.splitlines()
-        header = re.compile(
-            r"^\|\s*(Код|Code|代码)\s*\|\s*small\s*\|\s*large\s*\|$"
-        )
+        header = re.compile(r"^\|\s*(Код|Code|代码)\s*\|\s*small\s*\|\s*large\s*\|$")
         start = next((i for i, line in enumerate(lines) if header.match(line)), None)
         if start is None:
             return {}
-        pattern = re.compile(
-            r"^\|\s*`([a-z-]+)`\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$"
-        )
+        pattern = re.compile(r"^\|\s*`([a-z-]+)`\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$")
         found: dict[str, tuple[str, str]] = {}
-        for line in lines[start + 2:]:          # +2 — пропуск строки разделителя
+        for line in lines[start + 2 :]:  # +2 — пропуск строки разделителя
             if not line.startswith("|"):
                 break
             match = pattern.match(line)
@@ -301,8 +304,10 @@ class TestTranslations:
     @staticmethod
     def _body(text: str) -> str:
         lines = text.splitlines()
-        return "\n".join(lines[:TestTranslations.SWITCHER_LINE]
-                         + lines[TestTranslations.SWITCHER_LINE + 1:])
+        return "\n".join(
+            lines[: TestTranslations.SWITCHER_LINE]
+            + lines[TestTranslations.SWITCHER_LINE + 1 :]
+        )
 
     def test_brand_mentioned(self, texts):
         for code, text in texts.items():
@@ -318,8 +323,7 @@ class TestTranslations:
         for code in ("en", "zh"):
             cyrillic = set(re.findall(r"[А-Яа-яЁё]+", self._body(texts[code])))
             assert cyrillic <= ALLOWED_CYRILLIC, (
-                f"README {code}: неожиданная кириллица "
-                f"{cyrillic - ALLOWED_CYRILLIC}"
+                f"README {code}: неожиданная кириллица {cyrillic - ALLOWED_CYRILLIC}"
             )
 
     def test_no_mixed_script_words(self, texts):

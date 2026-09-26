@@ -12,6 +12,7 @@
   3. словари переводов на месте (иначе приложение молча стартует по-английски);
   4. есть DLL Vosk и PortAudio (иначе не заработает микрофон/распознавание).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -102,14 +103,13 @@ def check_environment() -> None:
         raise SystemExit(
             "Не установлен PyInstaller.\n"
             '  py -m pip install -e ".[dev]"   # или: py -m pip install pyinstaller'
-        )
+        ) from None
     try:
         import PySide6  # noqa: F401
     except ImportError:
         raise SystemExit(
-            "Не установлен PySide6-Essentials.\n"
-            '  py -m pip install -e ".[gui]"'
-        )
+            'Не установлен PySide6-Essentials.\n  py -m pip install -e ".[gui]"'
+        ) from None
 
 
 def _child_env() -> dict[str, str]:
@@ -132,7 +132,8 @@ def prepare(version: str) -> None:
         print("Иконка не найдена, генерирую...")
         subprocess.run(
             [sys.executable, str(PACKAGING / "make_icon.py")],
-            check=True, env=_child_env(),
+            check=True,
+            env=_child_env(),
         )
     # Кириллица в пути ломает вывод и часть сборщиков — предупреждаем.
     if not str(ROOT).isascii():
@@ -146,11 +147,15 @@ def prepare(version: str) -> None:
 
 def run_pyinstaller(onefile: bool = False) -> None:
     cmd = [
-        sys.executable, "-m", "PyInstaller",
+        sys.executable,
+        "-m",
+        "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--distpath", str(DIST),
-        "--workpath", str(BUILD / "work"),
+        "--distpath",
+        str(DIST),
+        "--workpath",
+        str(BUILD / "work"),
         str(SPEC),
     ]
     env = _child_env()
@@ -188,8 +193,7 @@ def verify(version: str) -> Path:
     qm = list(dist_dir.rglob("*.qm"))
     if qm:
         problems.append(
-            f"в сборке {len(qm)} Qt-переводов (*.qm), они не используются: "
-            f"{qm[0].name}"
+            f"в сборке {len(qm)} Qt-переводов (*.qm), они не используются: {qm[0].name}"
         )
 
     # 3. Нативные библиотеки VOSK и PortAudio.
@@ -247,8 +251,9 @@ def make_zip(dist_dir: Path, version: str) -> Path:
         for path in sorted(dist_dir.rglob("*")):
             if path.is_file():
                 zf.write(path, Path("VoxVault") / path.relative_to(dist_dir))
-    print(f"\nАрхив для релиза: {zip_path} "
-          f"({zip_path.stat().st_size / 1024 / 1024:.1f} МБ)")
+    print(
+        f"\nАрхив для релиза: {zip_path} ({zip_path.stat().st_size / 1024 / 1024:.1f} МБ)"
+    )
     return zip_path
 
 
@@ -268,11 +273,11 @@ def make_onefile_zip(exe: Path, version: str) -> Path:
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
     if names != [exe.name]:
-        raise SystemExit(
-            f"Ожидался один файл в архиве, а получилось: {names}"
-        )
-    print(f"\nАрхив для релиза (один exe): {zip_path} "
-          f"({zip_path.stat().st_size / 1024 / 1024:.1f} МБ)")
+        raise SystemExit(f"Ожидался один файл в архиве, а получилось: {names}")
+    print(
+        f"\nАрхив для релиза (один exe): {zip_path} "
+        f"({zip_path.stat().st_size / 1024 / 1024:.1f} МБ)"
+    )
     return zip_path
 
 
@@ -292,13 +297,17 @@ def main() -> int:
     setup_console()
 
     parser = argparse.ArgumentParser(description="Сборка VoxVault")
-    parser.add_argument("--zip", action="store_true",
-                        help="сделать zip для GitHub Releases")
-    parser.add_argument("--onefile", action="store_true",
-                        help="один exe вместо папки (медленный старт, "
-                             "ложные срабатывания антивирусов)")
-    parser.add_argument("--clean", action="store_true",
-                        help="вычистить build/ и dist/ перед сборкой")
+    parser.add_argument(
+        "--zip", action="store_true", help="сделать zip для GitHub Releases"
+    )
+    parser.add_argument(
+        "--onefile",
+        action="store_true",
+        help="один exe вместо папки (медленный старт, ложные срабатывания антивирусов)",
+    )
+    parser.add_argument(
+        "--clean", action="store_true", help="вычистить build/ и dist/ перед сборкой"
+    )
     args = parser.parse_args()
 
     check_environment()

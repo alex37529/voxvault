@@ -2,6 +2,7 @@
 
 Пишет в общий config.py, поэтому CLI и GUI используют одни и те же настройки.
 """
+
 from __future__ import annotations
 
 import threading
@@ -19,13 +20,14 @@ from dictophone.qt_workers import ModelDownloadTask
 class SettingsDialog(QtWidgets.QDialog):
     """Настройки приложения. on_warm — колбэк прогрева модели (главное окно)."""
 
-    def __init__(self, cfg: config_mod.Config, tr, parent=None, on_warm=None,
-                 on_test=None):
+    def __init__(
+        self, cfg: config_mod.Config, tr, parent=None, on_warm=None, on_test=None
+    ):
         super().__init__(parent)
         self.cfg = cfg
         self._t = tr
-        self._on_warm = on_warm      # колбэк прогрева модели (главное окно)
-        self._on_test = on_test      # колбэк проверки микрофона
+        self._on_warm = on_warm  # колбэк прогрева модели (главное окно)
+        self._on_test = on_test  # колбэк проверки микрофона
         self.setWindowTitle(self._t("menu.settings"))
         self.setMinimumSize(560, 460)
 
@@ -44,7 +46,7 @@ class SettingsDialog(QtWidgets.QDialog):
         buttons.button(QtWidgets.QDialogButtonBox.StandardButton.Cancel).setText(
             self._t("btn.cancel")
         )
-        self.ok_btn.setEnabled(False)      # включается при первом изменении
+        self.ok_btn.setEnabled(False)  # включается при первом изменении
         buttons.accepted.connect(self._collect_and_accept)
         buttons.rejected.connect(self.reject)
 
@@ -59,7 +61,9 @@ class SettingsDialog(QtWidgets.QDialog):
         root.addLayout(extra)
 
     def _model_dir(self) -> Path:
-        return Path(self.cfg.model_dir) if self.cfg.model_dir else models.DEFAULT_MODEL_DIR
+        return (
+            Path(self.cfg.model_dir) if self.cfg.model_dir else models.DEFAULT_MODEL_DIR
+        )
 
     # -- вкладка «Устройство» ---------------------------------------------
     def _tab_device(self) -> QtWidgets.QWidget:
@@ -97,8 +101,9 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _on_test_clicked(self) -> None:
         if self._on_test is not None:
-            self._on_test(self.device_box.currentData(), self._on_test_result,
-                          self._on_test_failed)
+            self._on_test(
+                self.device_box.currentData(), self._on_test_result, self._on_test_failed
+            )
 
     def _on_test_result(self, text: str) -> None:
         self.btn_test.setEnabled(True)
@@ -237,8 +242,9 @@ class SettingsDialog(QtWidgets.QDialog):
         if row < 0:
             return None
         rows = models.list_installed(self._model_dir())
-        ordered = [r for r in rows if r["path"] is not None] + \
-                  [r for r in rows if r["path"] is None]
+        ordered = [r for r in rows if r["path"] is not None] + [
+            r for r in rows if r["path"] is None
+        ]
         return ordered[row] if row < len(ordered) else None
 
     def _on_model_picked(self, *_a) -> None:
@@ -247,11 +253,15 @@ class SettingsDialog(QtWidgets.QDialog):
             return
         parts = []
         if data["small"]:
-            parts.append(f"{self._t('models.have_small')} "
-                         f"({models.dir_size_mb(self._model_dir() / data['small'])} МБ)")
+            parts.append(
+                f"{self._t('models.have_small')} "
+                f"({models.dir_size_mb(self._model_dir() / data['small'])} МБ)"
+            )
         if data["large"]:
             parts.append(f"{self._t('models.have_large')} ({data['size_mb']} МБ)")
-        self.model_info.setText(" · ".join(parts) if parts else self._t("models.have_none"))
+        self.model_info.setText(
+            " · ".join(parts) if parts else self._t("models.have_none")
+        )
         self.btn_dl_small.setEnabled(not data["small"])
         self.btn_dl_large.setEnabled(not data["large"])
         self.btn_del.setEnabled(data["path"] is not None)
@@ -263,8 +273,13 @@ class SettingsDialog(QtWidgets.QDialog):
             self._on_warm()
 
     def _set_downloading(self, active: bool) -> None:
-        for w in (self.btn_dl_small, self.btn_dl_large, self.btn_del,
-                  self.models_list, self.btn_warm):
+        for w in (
+            self.btn_dl_small,
+            self.btn_dl_large,
+            self.btn_del,
+            self.models_list,
+            self.btn_warm,
+        ):
             w.setEnabled(not active)
         self.btn_dl_cancel.setVisible(active)
         self.dl_progress.setVisible(active)
@@ -278,7 +293,8 @@ class SettingsDialog(QtWidgets.QDialog):
         lang = data["lang"]
         if models.MODELS[lang].get(size) is None:
             QtWidgets.QMessageBox.information(
-                self, self._t("tab.models"),
+                self,
+                self._t("tab.models"),
                 f"{lang}: {self._t('models.have_none')} ({size})",
             )
             return
@@ -286,7 +302,8 @@ class SettingsDialog(QtWidgets.QDialog):
         free = models.free_space_mb(self._model_dir())
         if free and free < need_mb * 1.2:
             QtWidgets.QMessageBox.warning(
-                self, self._t("tab.models"),
+                self,
+                self._t("tab.models"),
                 self._t("models.no_space", size=need_mb, free=free),
             )
             return
@@ -344,7 +361,8 @@ class SettingsDialog(QtWidgets.QDialog):
         if data is None or data["path"] is None:
             return
         ans = QtWidgets.QMessageBox.question(
-            self, self._t("tab.models"),
+            self,
+            self._t("tab.models"),
             self._t("models.confirm_delete", lang=data["lang"], size=data["size_mb"]),
             QtWidgets.QMessageBox.StandardButton.Yes
             | QtWidgets.QMessageBox.StandardButton.No,
@@ -385,7 +403,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.lang_box = QtWidgets.QComboBox()
         self.lang_box.setMinimumWidth(200)
         installed = models.installed_langs(self._model_dir())
-        for code in (installed or models.known_langs()):
+        for code in installed or models.known_langs():
             self.lang_box.addItem(code, code)
         idx = self.lang_box.findData(self.cfg.lang)
         if idx >= 0:

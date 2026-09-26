@@ -5,6 +5,7 @@
 
 Запуск:  python packaging/make_icon.py
 """
+
 from __future__ import annotations
 
 import sys
@@ -31,8 +32,9 @@ def main() -> int:
         print("Нужен PySide6: py -m pip install PySide6-Essentials", file=sys.stderr)
         return 1
     write_ico(OUT)
-    print(f"Иконка записана: {OUT} ({OUT.stat().st_size} байт, "
-          f"{len(ICON_SIZES)} размеров)")
+    print(
+        f"Иконка записана: {OUT} ({OUT.stat().st_size} байт, {len(ICON_SIZES)} размеров)"
+    )
     return 0
 
 

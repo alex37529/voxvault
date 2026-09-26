@@ -4,8 +4,10 @@
 пропускается, если Qt нет (см. importorskip). Так тесты остаются
 переносимыми на машины без Qt.
 """
+
 from __future__ import annotations
 
+import contextlib
 import os
 import threading
 from pathlib import Path
@@ -17,14 +19,21 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("PySide6", reason="PySide6 не установлен — GUI-тесты пропущены")
 
-from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
+from PySide6 import QtCore, QtGui, QtWidgets
 
-from dictophone import config as config_mod  # noqa: E402
-from dictophone import gui_qt  # noqa: E402
-from dictophone import models  # noqa: E402
-from dictophone import qt_history, qt_language, qt_model_dialog, qt_settings, qt_workers  # noqa: E402
-from dictophone import storage, updater  # noqa: E402
-from dictophone.i18n import I18n, available  # noqa: E402
+from dictophone import config as config_mod
+from dictophone import (
+    gui_qt,
+    models,
+    qt_history,
+    qt_language,
+    qt_model_dialog,
+    qt_settings,
+    qt_workers,
+    storage,
+    updater,
+)
+from dictophone.i18n import I18n, available
 
 
 @pytest.fixture(scope="module")
@@ -46,7 +55,7 @@ class TestLanguageDialog:
         dlg = qt_language.LanguageDialog(tr, "en", widget)
         texts = [dlg.list.item(i).text() for i in range(dlg.list.count())]
         assert "English" in texts
-        assert "Русский" in texts      # не переводим название языка!
+        assert "Русский" in texts  # не переводим название языка!
         assert "Українська" in texts
         assert "简体中文" in texts
         assert all(dlg.codes[i] != "auto" for i in range(len(dlg.codes)))
@@ -225,8 +234,7 @@ class TestMainWindow:
         win = gui_qt.MainWindow(cfg)
         try:
             dlg = qt_settings.SettingsDialog(cfg, win.t, win)
-            codes = [dlg.ui_lang_box.itemData(i)
-                     for i in range(dlg.ui_lang_box.count())]
+            codes = [dlg.ui_lang_box.itemData(i) for i in range(dlg.ui_lang_box.count())]
             assert None not in codes
             assert "auto" not in codes
             assert "ru" in codes
@@ -265,12 +273,13 @@ class TestMainWindow:
             # ссылка должна быть внутри текста, а не отдельной кнопкой
             html_text = view.toHtml()
             assert gui_qt.AUTHOR_LINKEDIN in html_text
-            assert 'href' in html_text
+            assert "href" in html_text
             assert view.openExternalLinks() is True
             dlg.close()
         finally:
             win._model = None
             win.close()
+
 
 class TestAboutVersion:
     """Версия и проверка обновлений в окне «О программе»."""
@@ -288,9 +297,7 @@ class TestAboutVersion:
 
     def _open_about(self, win, monkeypatch):
         captured = []
-        monkeypatch.setattr(
-            QtWidgets.QDialog, "exec", lambda self: captured.append(self)
-        )
+        monkeypatch.setattr(QtWidgets.QDialog, "exec", lambda self: captured.append(self))
         win._about()
         assert len(captured) == 1
         return captured[0]
@@ -317,9 +324,7 @@ class TestAboutVersion:
             win._model = None
             win.close()
 
-    def test_no_update_keeps_download_button_hidden(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_no_update_keeps_download_button_hidden(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         try:
             win._on_update_checked(None)
@@ -336,9 +341,7 @@ class TestAboutVersion:
             win._model = None
             win.close()
 
-    def test_new_version_offers_download_and_marks_menu(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_new_version_offers_download_and_marks_menu(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         try:
             win._on_update_checked(self._release())
@@ -355,9 +358,7 @@ class TestAboutVersion:
             win._model = None
             win.close()
 
-    def test_download_button_opens_release_in_browser(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_download_button_opens_release_in_browser(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         opened = []
         monkeypatch.setattr(
@@ -375,9 +376,7 @@ class TestAboutVersion:
             win._model = None
             win.close()
 
-    def test_open_dialog_is_refreshed_after_check(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_open_dialog_is_refreshed_after_check(self, app, tmp_path, monkeypatch):
         """Проверка идёт в фоне — открытое окно должно обновиться само."""
         win = self._win(app, tmp_path, monkeypatch)
         release = self._release("2.0.0")
@@ -424,9 +423,10 @@ class TestAboutVersion:
             # результат сохранился в настройках
             win._on_update_checked(None)
             assert win.cfg.last_update_check
-            assert config_mod.load_config(
-                tmp_path / "config.json"
-            ).last_update_check == win.cfg.last_update_check
+            assert (
+                config_mod.load_config(tmp_path / "config.json").last_update_check
+                == win.cfg.last_update_check
+            )
             # второй раз в тот же день сеть дёргать нельзя
             win.check_updates_silent()
             assert started == [1]
@@ -437,9 +437,7 @@ class TestAboutVersion:
     def test_silent_check_skipped_while_closing(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         started = []
-        monkeypatch.setattr(
-            win, "_start_update_check", lambda: started.append(1)
-        )
+        monkeypatch.setattr(win, "_start_update_check", lambda: started.append(1))
         try:
             win._closing = True
             win.check_updates_silent()
@@ -488,9 +486,9 @@ class TestHistoryDialog:
         win = gui_qt.MainWindow(cfg)
         win._closing = True
         try:
-            win._save_history(storage.Entry(
-                kind="mic", text="сохранено из Qt", lang="ru"
-            ))
+            win._save_history(
+                storage.Entry(kind="mic", text="сохранено из Qt", lang="ru")
+            )
             rows = storage.Storage(path).list()
             assert len(rows) == 1
             assert rows[0]["text"] == "сохранено из Qt"
@@ -518,10 +516,9 @@ class TestNoDoubleLoad:
         return created
 
     def _win(self, app, monkeypatch):
-        cfg = config_mod.Config(first_run=False, ui_lang="ru",
-                                lang="ru", size="large")
+        cfg = config_mod.Config(first_run=False, ui_lang="ru", lang="ru", size="large")
         win = gui_qt.MainWindow(cfg)
-        win._warm_task = object()      # имитируем идущий прогрев
+        win._warm_task = object()  # имитируем идущий прогрев
         return win
 
     def test_record_during_warmup_does_not_start_second(self, app, monkeypatch):
@@ -613,9 +610,7 @@ class TestNoDoubleLoad:
 class TestRequiredModel:
     def test_model_dialog_uses_selected_interface_language(self, app, widget, tmp_path):
         tr = I18n("en").t
-        dlg = qt_model_dialog.ModelDownloadDialog(
-            tr, "ru", "small", tmp_path, widget
-        )
+        dlg = qt_model_dialog.ModelDownloadDialog(tr, "ru", "small", tmp_path, widget)
         try:
             assert dlg.windowTitle() == tr("models.required_title")
             assert tr("models.select_model_text") in dlg.message.text()
@@ -641,7 +636,8 @@ class TestRequiredModel:
         cfg = config_mod.Config(model_dir=str(tmp_path), lang="ru", size="small")
         shown = []
         monkeypatch.setattr(
-            gui_qt.ModelDownloadDialog, "exec",
+            gui_qt.ModelDownloadDialog,
+            "exec",
             lambda self: shown.append(self) or QtWidgets.QDialog.DialogCode.Rejected,
         )
         gui_qt._ensure_required_model(cfg, I18n("ru").t)
@@ -651,9 +647,7 @@ class TestRequiredModel:
 
     def test_selected_model_is_saved_after_download(self, app, tmp_path, monkeypatch):
         cfg_path = tmp_path / "config.json"
-        cfg = config_mod.Config(
-            model_dir=str(tmp_path), lang="ru", size="small"
-        )
+        cfg = config_mod.Config(model_dir=str(tmp_path), lang="ru", size="small")
         monkeypatch.setattr(config_mod, "default_config_path", lambda: cfg_path)
 
         def accept_model(self):
@@ -661,9 +655,7 @@ class TestRequiredModel:
             self.size_box.setCurrentIndex(self.size_box.findData("large"))
             return QtWidgets.QDialog.DialogCode.Accepted
 
-        monkeypatch.setattr(
-            gui_qt.ModelDownloadDialog, "exec", accept_model
-        )
+        monkeypatch.setattr(gui_qt.ModelDownloadDialog, "exec", accept_model)
         gui_qt._ensure_required_model(cfg, I18n("ru").t)
         saved = config_mod.load_config(cfg_path)
         assert saved.lang == "en-us"
@@ -676,7 +668,8 @@ class TestRequiredModel:
         cfg = config_mod.Config(model_dir=str(tmp_path), lang="ru", size="small")
         shown = []
         monkeypatch.setattr(
-            gui_qt.ModelDownloadDialog, "exec",
+            gui_qt.ModelDownloadDialog,
+            "exec",
             lambda self: shown.append(self) or QtWidgets.QDialog.DialogCode.Rejected,
         )
         gui_qt._ensure_required_model(cfg, I18n("ru").t)
@@ -704,19 +697,23 @@ class TestMissingModelPrompt:
         monkeypatch.setattr(
             config_mod, "default_config_path", lambda: tmp_path / "config.json"
         )
-        defaults = dict(
-            first_run=False, ui_lang="ru", lang="ru", size="large",
-            model_dir=str(tmp_path),
-        )
+        defaults = {
+            "first_run": False,
+            "ui_lang": "ru",
+            "lang": "ru",
+            "size": "large",
+            "model_dir": str(tmp_path),
+        }
         cfg = config_mod.Config(**{**defaults, **kw})
         win = gui_qt.MainWindow(cfg)
-        win._warm_task = None      # прогрев в тестах не нужен
+        win._warm_task = None  # прогрев в тестах не нужен
         return win
 
     def _spy_load(self, win, monkeypatch):
         started = []
         monkeypatch.setattr(
-            win, "_start_load",
+            win,
+            "_start_load",
             lambda lang, size, then=None: started.append((lang, size)),
         )
         return started
@@ -727,7 +724,8 @@ class TestMissingModelPrompt:
         win = self._win(app, tmp_path, monkeypatch)
         asked = []
         monkeypatch.setattr(
-            win, "_ask_download_model",
+            win,
+            "_ask_download_model",
             lambda lang, size: asked.append((lang, size)) or False,
         )
         started = self._spy_load(win, monkeypatch)
@@ -744,7 +742,8 @@ class TestMissingModelPrompt:
         win = self._win(app, tmp_path, monkeypatch)
         shown = []
         monkeypatch.setattr(
-            gui_qt.ModelDownloadDialog, "exec",
+            gui_qt.ModelDownloadDialog,
+            "exec",
             lambda self: shown.append(self) or QtWidgets.QDialog.DialogCode.Rejected,
         )
         monkeypatch.setattr(win, "_ask_download_model", lambda *_: True)
@@ -758,16 +757,14 @@ class TestMissingModelPrompt:
             win._model = None
             win.close()
 
-    def test_downloaded_model_is_loaded_and_remembered(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_downloaded_model_is_loaded_and_remembered(self, app, tmp_path, monkeypatch):
         win = self._win(app, tmp_path, monkeypatch)
         monkeypatch.setattr(win, "_ask_download_model", lambda *_: True)
 
         def accept(self):
             self.lang_box.setCurrentIndex(self.lang_box.findData("en-us"))
             self.size_box.setCurrentIndex(self.size_box.findData("large"))
-            _install_model(tmp_path, "en-us", "large")   # «скачали»
+            _install_model(tmp_path, "en-us", "large")  # «скачали»
             return QtWidgets.QDialog.DialogCode.Accepted
 
         monkeypatch.setattr(gui_qt.ModelDownloadDialog, "exec", accept)
@@ -784,9 +781,7 @@ class TestMissingModelPrompt:
             win._model = None
             win.close()
 
-    def test_installed_model_loads_without_any_dialog(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_installed_model_loads_without_any_dialog(self, app, tmp_path, monkeypatch):
         _install_model(tmp_path, "ru", "large")
         win = self._win(app, tmp_path, monkeypatch)
         asked = []
@@ -802,9 +797,7 @@ class TestMissingModelPrompt:
             win._model = None
             win.close()
 
-    def test_record_with_missing_model_offers_download(
-        self, app, tmp_path, monkeypatch
-    ):
+    def test_record_with_missing_model_offers_download(self, app, tmp_path, monkeypatch):
         """«Запись» без модели спрашивает про скачивание, а не ругается ошибкой."""
         win = self._win(app, tmp_path, monkeypatch)
         asked = []
@@ -848,7 +841,7 @@ class TestMissingModelPrompt:
         def fake_exec(self):
             seen["title"] = self.windowTitle()
             seen["text"] = self.text()
-            self.buttons()[0].click()      # жмём «Скачать»
+            self.buttons()[0].click()  # жмём «Скачать»
 
         monkeypatch.setattr(QtWidgets.QMessageBox, "exec", fake_exec)
         try:
@@ -876,7 +869,6 @@ class TestMissingModelPrompt:
             win.close()
 
 
-
 class TestEntryPoint:
     """Дымовой тест реальной точки входа.
 
@@ -892,7 +884,8 @@ class TestEntryPoint:
         не вызывает exec() — проверяем именно построение окна.
         CLI завершает работу через SystemExit, поэтому ловим его.
         """
-        from dictophone import cli, config as cfg_mod
+        from dictophone import cli
+        from dictophone import config as cfg_mod
 
         cfg = tmp_path / "config.json"
         monkeypatch.setenv("DICTOPHONE_CONFIG", str(cfg))
@@ -901,9 +894,9 @@ class TestEntryPoint:
 
         try:
             code = cli.main(["gui-qt"])
-        except SystemExit as e:          # штатное завершение CLI
+        except SystemExit as e:  # штатное завершение CLI
             code = e.code
-        assert code in (0, None)         # дошли до конца main() без traceback
+        assert code in (0, None)  # дошли до конца main() без traceback
 
     def test_gui_startup_sets_taskbar_identity(self, app, tmp_path, monkeypatch):
         """Панель задач должна знать, что это VoxVault, а не python.exe.
@@ -911,7 +904,8 @@ class TestEntryPoint:
         Без AppUserModelID Windows рисует на панели задач значок Python,
         и кнопка ещё и сливается с другими python-скриптами.
         """
-        from dictophone import cli, config as cfg_mod
+        from dictophone import cli
+        from dictophone import config as cfg_mod
 
         cfg = tmp_path / "taskbar.json"
         monkeypatch.setenv("DICTOPHONE_CONFIG", str(cfg))
@@ -919,13 +913,12 @@ class TestEntryPoint:
         cfg_mod.save_config(cfg_mod.Config(first_run=False, ui_lang="ru"), cfg)
         calls = []
         monkeypatch.setattr(
-            gui_qt, "set_app_user_model_id",
+            gui_qt,
+            "set_app_user_model_id",
             lambda *a: calls.append(a) or True,
         )
-        try:
+        with contextlib.suppress(SystemExit):  # штатное завершение CLI
             cli.main(["gui-qt"])
-        except SystemExit:
-            pass
         assert calls, "идентификатор панели задач не задан при запуске"
 
     def test_main_window_uses_saved_uk_language(self, app, tmp_path):
@@ -942,7 +935,8 @@ class TestEntryPoint:
 
     def test_gui_qt_first_run_dialog(self, app, tmp_path, monkeypatch):
         """Свежая установка (first_run=True) обязана пройти выбор языка."""
-        from dictophone import cli, config as cfg_mod, qt_language
+        from dictophone import cli, qt_language
+        from dictophone import config as cfg_mod
 
         cfg = tmp_path / "fresh.json"
         monkeypatch.setenv("DICTOPHONE_CONFIG", str(cfg))
@@ -950,14 +944,12 @@ class TestEntryPoint:
         monkeypatch.setattr(gui_qt, "_ensure_required_model", lambda *_: None)
 
         def accept_auto(self):
-            self.list.setCurrentRow(0)       # «по системе»
+            self.list.setCurrentRow(0)  # «по системе»
             QtWidgets.QDialog.accept(self)
 
         monkeypatch.setattr(qt_language.LanguageDialog, "exec", accept_auto)
-        try:
+        with contextlib.suppress(SystemExit):  # штатное завершение CLI
             cli.main(["gui-qt"])
-        except SystemExit:
-            pass
         # выбор состоялся, диалог больше не покажут
         assert cfg_mod.load_config(cfg).first_run is False
 
@@ -967,13 +959,12 @@ class TestEntryPoint:
         Раньше диалог всплывал при каждом запуске, потому что выбор языка
         не удавалось сохранить, а ошибка проглатывалась.
         """
-        from dictophone import cli, config as cfg_mod, qt_language
+        from dictophone import cli, qt_language
+        from dictophone import config as cfg_mod
 
         cfg = tmp_path / "done.json"
         monkeypatch.setenv("DICTOPHONE_CONFIG", str(cfg))
-        cfg_mod.save_config(
-            cfg_mod.Config(first_run=False, ui_lang="ru"), cfg
-        )
+        cfg_mod.save_config(cfg_mod.Config(first_run=False, ui_lang="ru"), cfg)
         monkeypatch.setattr(gui_qt, "_ensure_required_model", lambda *_: None)
 
         created = []
@@ -984,15 +975,14 @@ class TestEntryPoint:
             orig(self, tr, detected, parent)
 
         monkeypatch.setattr(qt_language.LanguageDialog, "__init__", spy)
-        try:
+        with contextlib.suppress(SystemExit):  # штатное завершение CLI
             cli.main(["gui-qt"])
-        except SystemExit:
-            pass
         assert created == [], "диалог показан повторно при first_run=false"
 
     def test_dialog_shown_once_then_saved(self, app, tmp_path, monkeypatch):
         """Первый запуск: диалог показывается, выбор сохраняется, второй — нет."""
-        from dictophone import cli, config as cfg_mod, qt_language
+        from dictophone import cli, qt_language
+        from dictophone import config as cfg_mod
 
         cfg = tmp_path / "fresh2.json"
         monkeypatch.setenv("DICTOPHONE_CONFIG", str(cfg))
@@ -1004,27 +994,24 @@ class TestEntryPoint:
 
         def fake_exec(self):
             shown.append(1)
-            self.list.setCurrentRow(0)      # «по системе»
+            self.list.setCurrentRow(0)  # «по системе»
             return QtWidgets.QDialog.DialogCode.Accepted
 
         monkeypatch.setattr(qt_language.LanguageDialog, "exec", fake_exec)
-        try:
+        with contextlib.suppress(SystemExit):  # штатное завершение CLI
             cli.main(["gui-qt"])
-        except SystemExit:
-            pass
         assert len(shown) == 1, "диалог должен показаться ровно один раз"
         saved = cfg_mod.load_config(cfg)
         assert saved.first_run is False
         # второй запуск — без диалога
-        try:
+        with contextlib.suppress(SystemExit):  # штатное завершение CLI
             cli.main(["gui-qt"])
-        except SystemExit:
-            pass
         assert len(shown) == 1, "диалог показан повторно"
 
     def test_save_failure_is_reported(self, app, tmp_path, monkeypatch, capsys):
         """Если настройки не сохранились — об этом сказано в stderr."""
-        from dictophone import config as cfg_mod, qt_language
+        from dictophone import config as cfg_mod
+        from dictophone import qt_language
 
         def boom(*a, **k):
             raise OSError("диск только для чтения")
@@ -1042,7 +1029,7 @@ class TestEntryPoint:
         try:
             win._closing = True
             win._warm_task = None
-            win.start_warmup()          # должен выйти сразу
+            win.start_warmup()  # должен выйти сразу
             assert win._warm_task is None
         finally:
             win._model = None
@@ -1111,7 +1098,8 @@ class TestEntryPoint:
         win = gui_qt.MainWindow(config_mod.Config())
         try:
             monkeypatch.setattr(
-                QtWidgets.QMessageBox, "question",
+                QtWidgets.QMessageBox,
+                "question",
                 lambda *a, **k: QtWidgets.QMessageBox.StandardButton.No,
             )
             win.text.setPlainText("есть текст")
@@ -1131,8 +1119,11 @@ class TestEntryPoint:
             win._text_dirty = False
             questions = []
             monkeypatch.setattr(
-                QtWidgets.QMessageBox, "question",
-                lambda *a, **k: questions.append(a) or QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox,
+                "question",
+                lambda *a, **k: (
+                    questions.append(a) or QtWidgets.QMessageBox.StandardButton.No
+                ),
             )
             ev = QtCore.QEvent(QtCore.QEvent.Type.Close)
             win.closeEvent(ev)
@@ -1145,9 +1136,20 @@ class TestEntryPoint:
         """Все подкоманды описаны в парсере (нет «неизвестных» при разборе)."""
         from dictophone import cli
 
-        for cmd in ("list", "devices", "config", "download", "file", "mic",
-                    "gui", "gui-qt", "history"):
-            args = cli.build_parser().parse_args([cmd] if cmd not in ("file",) else [cmd, "a.wav"])
+        for cmd in (
+            "list",
+            "devices",
+            "config",
+            "download",
+            "file",
+            "mic",
+            "gui",
+            "gui-qt",
+            "history",
+        ):
+            args = cli.build_parser().parse_args(
+                [cmd] if cmd not in ("file",) else [cmd, "a.wav"]
+            )
             assert args.command == cmd
 
     def test_no_broken_names_in_package(self):
@@ -1162,7 +1164,9 @@ class TestEntryPoint:
             tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
             defined = set(dir(builtins)) | {"__file__", "__name__", "__doc__"}
             for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if isinstance(
+                    node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                ):
                     defined.add(node.name)
                 elif isinstance(node, (ast.Import, ast.ImportFrom)):
                     for a in node.names:
@@ -1175,8 +1179,11 @@ class TestEntryPoint:
                     defined.add(node.name)
                 elif isinstance(node, ast.Global):
                     defined.update(node.names)
-            used = {n.id for n in ast.walk(tree)
-                    if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+            used = {
+                n.id
+                for n in ast.walk(tree)
+                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+            }
             missing = sorted(used - defined)
             if missing:
                 problems.append(f"{py.name}: {missing}")
@@ -1200,8 +1207,8 @@ class TestWarmup:
         """Предогрев не должен блокировать интерфейс (иначе смысла нет)."""
         win = self._win()
         try:
-            win._warm_task = object()      # имитируем идущую загрузку
-            win.start_warmup()             # второй вызов — не должен ничего делать
+            win._warm_task = object()  # имитируем идущую загрузку
+            win.start_warmup()  # второй вызов — не должен ничего делать
             assert win._warm_task is not None
         finally:
             win._warm_task = None
@@ -1211,8 +1218,9 @@ class TestWarmup:
         """Не установленная модель НЕ должна молча качать 1.8 ГБ при старте."""
         win = self._win()
         try:
-            task = qt_workers.LoadTask(Path("C:/nonexistent"), "xx", "large",
-                                   auto_download=False)
+            task = qt_workers.LoadTask(
+                Path("C:/nonexistent"), "xx", "large", auto_download=False
+            )
             assert task._auto_download is False
             # по умолчанию (основная запись) скачивание разрешено
             assert qt_workers.LoadTask(Path("C:/x"), "ru", "small")._auto_download
@@ -1227,7 +1235,7 @@ class TestWarmup:
             key = win._current_model_key()
             win._on_load_ready(sentinel, "ru", "large", win._warm_token)
             assert win._model is sentinel
-            assert win._model_lang == f"ru/large"
+            assert win._model_lang == "ru/large"
             # ключ совпадает с текущим выбором -> состояние ready
             assert win._model_lang == key
             assert win.warmup_state() == "ready"
@@ -1267,6 +1275,7 @@ class TestWarmup:
         win = self._win(cfg)
         try:
             import time as _t
+
             win._warm_started = _t.time() - 12
             path = tmp_path / "c.json"
             monkeypatch.setattr(config_mod, "default_config_path", lambda: path)
@@ -1283,11 +1292,10 @@ class TestWarmup:
         win = gui_qt.MainWindow(cfg)
         calls = []
         try:
-            dlg = gui_qt.SettingsDialog(cfg, win.t, win,
-                                       on_warm=lambda: calls.append(1))
+            dlg = gui_qt.SettingsDialog(cfg, win.t, win, on_warm=lambda: calls.append(1))
             dlg.btn_warm.click()
             assert calls == [1]
-            assert dlg.btn_warm.text()           # подпись не пустая
+            assert dlg.btn_warm.text()  # подпись не пустая
             dlg.close()
         finally:
             win._model = None
@@ -1300,13 +1308,15 @@ class TestWarmup:
         seen = {}
         try:
             dlg = qt_settings.SettingsDialog(
-                cfg, win.t, win,
+                cfg,
+                win.t,
+                win,
                 on_test=lambda dev, ok, err: seen.update(dev=dev, ok=ok, err=err),
             )
             dlg.btn_test.click()
             assert "dev" in seen
             assert callable(seen["ok"]) and callable(seen["err"])
-            assert dlg.btn_test.text()           # подпись не пустая
+            assert dlg.btn_test.text()  # подпись не пустая
             dlg.close()
         finally:
             win._model = None
@@ -1331,8 +1341,9 @@ class TestWarmup:
 
     def test_restore_defaults_resets_fields(self, app):
         """«Вернуть по умолчанию» сбрасывает изменённые поля."""
-        cfg = config_mod.Config(lang="de", size="large", output_dir="D:/custom",
-                                history=False, ui_lang="ru")
+        cfg = config_mod.Config(
+            lang="de", size="large", output_dir="D:/custom", history=False, ui_lang="ru"
+        )
         win = gui_qt.MainWindow(cfg)
         try:
             dlg = qt_settings.SettingsDialog(cfg, win.t, win)
@@ -1382,7 +1393,7 @@ class TestWarmup:
             task = qt_workers.LoadTask(Path("C:/x"), "ru", "small")
             win._warm_task = task
             ev = QtCore.QEvent(QtCore.QEvent.Type.Close)
-            win.closeEvent(ev)          # не должно бросить AttributeError
+            win.closeEvent(ev)  # не должно бросить AttributeError
             assert task._cancelled is True
         finally:
             win._model = None

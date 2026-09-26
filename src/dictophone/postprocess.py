@@ -12,22 +12,22 @@ VOSK выдаёт «голый» текст — без заглавных бук
 точку в конце. Точность — заметно ниже recasepunc, зато мгновенно и без
 1.6 ГБ модели.
 """
+
 from __future__ import annotations
 
-import re
 from typing import Protocol, Sequence
+
 
 class PostProcessor(Protocol):
     """Интерфейс постобработки. Реализуйте — и подключите через set_backend."""
 
-    def apply(self, text: str, segments: Sequence[str] = ()) -> str:
-        ...
+    def apply(self, text: str, segments: Sequence[str] = ()) -> str: ...
 
 
 def _capitalize(sentence: str) -> str:
     for i, ch in enumerate(sentence):
         if ch.isalpha():
-            return sentence[:i] + ch.upper() + sentence[i + 1:]
+            return sentence[:i] + ch.upper() + sentence[i + 1 :]
         if ch.isdigit():
             continue
     return sentence
@@ -49,9 +49,7 @@ def heuristic(text: str, segments: Sequence[str] = ()) -> str:
     else:
         parts = [p for p in text.split("  ") if p.strip()] or [text.strip()]
 
-    sentences = [
-        _capitalize(part.rstrip(" ,;:-")) for part in parts if part.strip()
-    ]
+    sentences = [_capitalize(part.rstrip(" ,;:-")) for part in parts if part.strip()]
     text = ". ".join(s for s in sentences if s)
     if text and not text.endswith((".", "!", "?", "…")):
         text += "."
@@ -61,7 +59,7 @@ def heuristic(text: str, segments: Sequence[str] = ()) -> str:
 class IdentityPostProcessor:
     """Ничего не делает — режим «как распознал VOSK»."""
 
-    def apply(self, text: str, segments: Sequence[str] = ()) -> str:
+    def apply(self, text: str, segments: Sequence[str] = ()) -> str:  # noqa: ARG002 - сигнатура общая для всех постпроцессоров
         return text
 
 

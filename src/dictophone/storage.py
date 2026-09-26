@@ -7,6 +7,7 @@
 База по умолчанию: `%APPDATA%\\dictophone\\history.db`
 (переопределяется `DICTOPHONE_DB` или настройкой `db_path`).
 """
+
 from __future__ import annotations
 
 import os
@@ -16,7 +17,7 @@ from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator, List, Optional
 
 APP_NAME = "dictophone"
 DB_ENV = "DICTOPHONE_DB"
@@ -55,9 +56,9 @@ def default_db_path() -> Path:
 class Entry:
     """Запись истории."""
 
-    kind: str                                  # 'mic' | 'file'
+    kind: str  # 'mic' | 'file'
     text: str
-    created_at: Optional[str] = None          # ISO; None -> сейчас
+    created_at: Optional[str] = None  # ISO; None -> сейчас
     source: Optional[str] = None
     lang: Optional[str] = None
     model_size: Optional[str] = None
@@ -99,11 +100,10 @@ class Storage:
     @contextmanager
     def _write(self) -> Iterator[sqlite3.Connection]:
         # записи сериализуем: избегаем «database is locked» при параллельной записи
-        with self._write_lock:
-            with closing(self._connect()) as conn:
-                conn.row_factory = sqlite3.Row
-                yield conn
-                conn.commit()
+        with self._write_lock, closing(self._connect()) as conn:
+            conn.row_factory = sqlite3.Row
+            yield conn
+            conn.commit()
 
     # -- запись ------------------------------------------------------------
     def add(self, entry: Entry) -> int:
@@ -131,7 +131,7 @@ class Storage:
                     entry.output_path,
                 ),
             )
-            return int(cur.lastrowid)
+            return int(cur.lastrowid or 0)
 
     # -- чтение ------------------------------------------------------------
     def get(self, entry_id: int) -> Optional[dict]:
@@ -146,10 +146,16 @@ class Storage:
         limit: int = 20,
         lang: Optional[str] = None,
         kind: Optional[str] = None,
-    ) -> list[dict]:
-        """Последние записи (новые сверху)."""
+    ) -> List[dict]:
+        """Последние записи (новые сверху).
+
+        List[...], а не list[...]: метод называется list и перекрывает
+        встроенный тип в области класса, из-за чего list[dict] в аннотации
+        перестал бы быть типом.
+        """
         sql = "SELECT * FROM transcriptions"
-        clauses, params = [], []
+        clauses: list[str] = []
+        params: list = []
         if lang:
             clauses.append("lang = ?")
             params.append(lang)
@@ -163,7 +169,7 @@ class Storage:
         with self._read() as conn:
             return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
-    def search(self, query: str, limit: int = 20) -> list[dict]:
+    def search(self, query: str, limit: int = 20) -> List[dict]:  # см. list()
         """Поиск подстроки в тексте/исходнике (LIKE)."""
         pattern = f"%{query.strip()}%"
         with self._read() as conn:
@@ -180,16 +186,12 @@ class Storage:
 
     def count(self) -> int:
         with self._read() as conn:
-            return int(
-                conn.execute("SELECT COUNT(*) FROM transcriptions").fetchone()[0]
-            )
+            return int(conn.execute("SELECT COUNT(*) FROM transcriptions").fetchone()[0])
 
     # -- удаление ----------------------------------------------------------
     def delete(self, entry_id: int) -> bool:
         with self._write() as conn:
-            cur = conn.execute(
-                "DELETE FROM transcriptions WHERE id = ?", (entry_id,)
-            )
+            cur = conn.execute("DELETE FROM transcriptions WHERE id = ?", (entry_id,))
             return cur.rowcount > 0
 
     def clear(self) -> int:
@@ -201,7 +203,7 @@ class Storage:
         """Совместимость: постоянного соединения больше нет — ничего не делаем."""
         return
 
-    def __enter__(self) -> "Storage":
+    def __enter__(self) -> Storage:
         return self
 
     def __exit__(self, *exc) -> None:
@@ -211,6 +213,7 @@ class Storage:
 # ---------------------------------------------------------------------------
 # Вывод в терминал
 # ---------------------------------------------------------------------------
+
 
 def format_entry(row: dict, *, preview: int = 60) -> str:
     """Строка списка истории: дата, вид, язык, длина, начало текста."""

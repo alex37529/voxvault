@@ -1,4 +1,5 @@
 """Тесты CLI: парсер, настройки, роутинг (без реальных моделей/микрофона)."""
+
 from __future__ import annotations
 
 import json
@@ -97,9 +98,9 @@ class TestConfigCommand:
         cli.main(["config", "first_run=false", "ui_lang=ru", "lang=uk"])
         cli.main(["config", "--reset"])
         data = json.loads(isolated_config.read_text(encoding="utf-8"))
-        assert data["first_run"] is False     # диалог больше не появится
-        assert data["ui_lang"] == "ru"        # язык интерфейса сохранён
-        assert data["lang"] == "ru"           # а вот язык распознавания сброшен
+        assert data["first_run"] is False  # диалог больше не появится
+        assert data["ui_lang"] == "ru"  # язык интерфейса сохранён
+        assert data["lang"] == "ru"  # а вот язык распознавания сброшен
 
     def test_ask_language_sets_first_run(self, isolated_config):
         """--ask-language намеренно включает вопрос при следующем запуске."""
@@ -107,7 +108,7 @@ class TestConfigCommand:
         cli.main(["config", "--ask-language"])
         data = json.loads(isolated_config.read_text(encoding="utf-8"))
         assert data["first_run"] is True
-        assert data["ui_lang"] == "ru"        # сам язык не меняем, только флаг
+        assert data["ui_lang"] == "ru"  # сам язык не меняем, только флаг
 
     def test_size_can_be_set_and_persists(self, isolated_config):
         """Пользователь может зафиксировать размер модели (не 'auto')."""
@@ -176,8 +177,9 @@ class TestRouting:
         assert seen["spec"] == "yeti"
         assert stub_transcribe[0]["device"] == 7
 
-    def test_mic_device_error_is_user_friendly(self, isolated_config,
-                                               stub_transcribe, monkeypatch):
+    def test_mic_device_error_is_user_friendly(
+        self, isolated_config, stub_transcribe, monkeypatch
+    ):
         def boom(spec):
             raise cli.devices_mod.DeviceError("Устройство 'xx' не найдено")
 

@@ -4,24 +4,26 @@ Windows-консоль по умолчанию живёт в cp866/cp1251. Ну�
 страницы консоли (иначе байты UTF-8 она отрисует как мусор), и перевод
 стандартных потоков на UTF-8.
 """
+
 from __future__ import annotations
 
+import contextlib
 import sys
 
 
 def setup_console() -> None:
     """Перевести консоль и stdout/stderr в UTF-8. Безопасно при отсутствии консоли."""
     if sys.platform == "win32":
-        try:
+        # нет консоли (GUI-запуск, перенаправление) — не критично
+        with contextlib.suppress(Exception):
             import ctypes
 
             kernel32 = ctypes.windll.kernel32
             kernel32.SetConsoleOutputCP(65001)
             kernel32.SetConsoleCP(65001)
-        except Exception:
-            pass  # нет консоли (GUI-запуск, перенаправление) — не критично
     for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
-            pass  # поток не поддерживает reconfigure — тоже не критично
+        # поток не поддерживает reconfigure — тоже не критично
+        with contextlib.suppress(Exception):
+            reconfigure = getattr(stream, "reconfigure", None)
+            if callable(reconfigure):
+                reconfigure(encoding="utf-8", errors="replace")

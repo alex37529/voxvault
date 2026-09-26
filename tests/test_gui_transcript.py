@@ -4,6 +4,7 @@
 заменялся, поэтому итоговая расшифровка засорялась серыми «(… )» хвостами.
 Здесь проверяется, что незакрытый сегмент всегда один и всегда перезаписывается.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -160,5 +161,5 @@ class TestSimulatedSession:
         # ни один черновик не утёк в итог
         for draft in ("привет мо", "сег��дн", "и последн"):
             assert draft not in text
-        assert text.count("\n") == 0      # итог — абзацем, как в файле
+        assert text.count("\n") == 0  # итог — абзацем, как в файле
         assert buf.finalized() == text

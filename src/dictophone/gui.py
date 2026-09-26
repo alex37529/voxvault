@@ -6,6 +6,7 @@
 
 Запуск: `py main.py gui`
 """
+
 from __future__ import annotations
 
 import queue
@@ -19,7 +20,7 @@ from dictophone import config as config_mod
 from dictophone import devices as devices_mod
 from dictophone import models, storage, transcribe
 from dictophone.console import setup_console
-from dictophone.transcript import FINAL, PARTIAL, SpeechEvent, TranscriptBuffer
+from dictophone.transcript import PARTIAL, TranscriptBuffer
 
 POLL_MS = 100  # как часто UI забирает события из очереди
 
@@ -27,7 +28,7 @@ POLL_MS = 100  # как часто UI забирает события из оч�
 MSG_STATUS = "status"
 MSG_PARTIAL = "partial"
 MSG_FINAL = "final"
-MSG_RESULT = "result"   # итоговый текст (авторитетный, как в файле)
+MSG_RESULT = "result"  # итоговый текст (авторитетный, как в файле)
 MSG_DONE = "done"
 MSG_ERROR = "error"
 
@@ -44,7 +45,7 @@ class DictophoneApp:
         self.cfg = config_mod.load_config()
         self.stop_event: Optional[threading.Event] = None
         self.worker: Optional[threading.Thread] = None
-        self.queue: "queue.Queue[tuple[str, Any]]" = queue.Queue()
+        self.queue: queue.Queue[tuple[str, Any]] = queue.Queue()
         self.transcript = TranscriptBuffer()
         self.db = storage.Storage()
 
@@ -63,7 +64,9 @@ class DictophoneApp:
         ttk.Label(opts, text="Микрофон:").grid(row=0, column=0, sticky="w")
         self.device_box = ttk.Combobox(opts, state="readonly", width=42)
         self.device_box.grid(row=0, column=1, sticky="ew", padx=(6, 6))
-        ttk.Button(opts, text="Обновить", command=self._refresh_devices).grid(row=0, column=2)
+        ttk.Button(opts, text="Обновить", command=self._refresh_devices).grid(
+            row=0, column=2
+        )
 
         ttk.Label(opts, text="Язык:").grid(row=1, column=0, sticky="w", pady=(6, 0))
         self.lang_box = ttk.Combobox(opts, state="readonly", width=42)
@@ -71,19 +74,24 @@ class DictophoneApp:
         self.lang_box.set(self.cfg.lang)
 
         ttk.Label(opts, text="Модель:").grid(row=2, column=0, sticky="w", pady=(6, 0))
-        self.size_box = ttk.Combobox(opts, state="readonly", width=42,
-                                    values=("auto", "small", "large"))
+        self.size_box = ttk.Combobox(
+            opts, state="readonly", width=42, values=("auto", "small", "large")
+        )
         self.size_box.grid(row=2, column=1, sticky="ew", padx=(6, 6), pady=(6, 0))
         self.size_box.set(self.cfg.size)
 
-        ttk.Label(opts, text="Папка для текстов:").grid(row=3, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(opts, text="Папка для текстов:").grid(
+            row=3, column=0, sticky="w", pady=(6, 0)
+        )
         self.out_var = tk.StringVar(
             value=self.cfg.output_dir or str(models.DEFAULT_OUTPUT_DIR)
         )
         ttk.Entry(opts, textvariable=self.out_var).grid(
             row=3, column=1, sticky="ew", padx=(6, 6), pady=(6, 0)
         )
-        ttk.Button(opts, text="Обзор…", command=self._pick_output_dir).grid(row=3, column=2)
+        ttk.Button(opts, text="Обзор…", command=self._pick_output_dir).grid(
+            row=3, column=2
+        )
 
         ttk.Label(opts, text="Аудиофайл:").grid(row=4, column=0, sticky="w", pady=(6, 0))
         self.file_var = tk.StringVar()
@@ -95,14 +103,17 @@ class DictophoneApp:
 
         bar = ttk.Frame(self.root, padding=(10, 0))
         bar.pack(fill="x")
-        self.btn_mic = ttk.Button(bar, text="🎙 Запись с микрофона",
-                                  command=self._start_mic)
+        self.btn_mic = ttk.Button(
+            bar, text="🎙 Запись с микрофона", command=self._start_mic
+        )
         self.btn_mic.pack(side="left")
         self.btn_file = ttk.Button(bar, text="Распознать файл", command=self._start_file)
         self.btn_file.pack(side="left", padx=6)
         self.btn_stop = ttk.Button(bar, text="Стоп", command=self._stop, state="disabled")
         self.btn_stop.pack(side="left")
-        ttk.Button(bar, text="Сохранить настройки", command=self._save_settings).pack(side="right")
+        ttk.Button(bar, text="Сохранить настройки", command=self._save_settings).pack(
+            side="right"
+        )
         ttk.Button(bar, text="История", command=self._open_history).pack(side="right")
 
         text_frame = ttk.Frame(self.root, padding=10)
@@ -113,7 +124,8 @@ class DictophoneApp:
         self.text.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
         self.text.tag_configure("partial", foreground="#777777")
-        self._partial_mark = self.text.mark_set("partial_tail", "end-1c") or "partial_tail"
+        self._partial_mark = "partial_tail"
+        self.text.mark_set(self._partial_mark, "end-1c")
         self.text.configure(state="disabled")
 
         self.status = ttk.Label(self.root, text="", anchor="w", padding=(10, 4))
@@ -195,7 +207,9 @@ class DictophoneApp:
         return self.lang_box.get() or self.cfg.lang
 
     def _model_dir(self) -> Path:
-        return Path(self.cfg.model_dir) if self.cfg.model_dir else models.DEFAULT_MODEL_DIR
+        return (
+            Path(self.cfg.model_dir) if self.cfg.model_dir else models.DEFAULT_MODEL_DIR
+        )
 
     def _pick_output_dir(self) -> None:
         chosen = filedialog.askdirectory(initialdir=self.out_var.get() or ".")
@@ -212,10 +226,13 @@ class DictophoneApp:
     def _save_settings(self) -> None:
         try:
             self.cfg.lang = self._selected_lang()
-            self.cfg.size = self._selected_size()
+            self.cfg.size = self._selected_size() or "auto"
             self.cfg.output_dir = self.out_var.get() or None
-            spec = self._device_specs[self.device_box.current()] \
-                if self.device_box.current() > 0 else None
+            spec = (
+                self._device_specs[self.device_box.current()]
+                if self.device_box.current() > 0
+                else None
+            )
             self.cfg.device = spec
             path = config_mod.save_config(self.cfg)
             self._set_status(f"Настройки сохранены: {path}")
@@ -246,7 +263,9 @@ class DictophoneApp:
         self._clear_transcript()
         self.stop_event = threading.Event()
         self._set_running(True)
-        threading.Thread(target=self._file_worker, args=(Path(path),), daemon=True).start()
+        threading.Thread(
+            target=self._file_worker, args=(Path(path),), daemon=True
+        ).start()
 
     def _stop(self) -> None:
         if self.stop_event is not None:
@@ -270,17 +289,32 @@ class DictophoneApp:
             for event in transcribe.iter_mic(
                 model, device=device, stop_event=self.stop_event, capture=capture
             ):
-                self._emit(MSG_PARTIAL if event.kind == PARTIAL else MSG_FINAL, event.text)
+                self._emit(
+                    MSG_PARTIAL if event.kind == PARTIAL else MSG_FINAL, event.text
+                )
             self._emit(MSG_STATUS, "Обрабатываю…")
             from dictophone import postprocess as pp
+
             text = pp.apply(" ".join(capture.segments), capture.segments)
-            out = self._save_result(text, kind="mic", lang=lang, size=size,
-                                    device=device, audio_s=capture.audio_s)
-            self.db.add(storage.Entry(
-                kind="mic", text=text, lang=lang, model_size=size or "auto",
-                device=str(device) if device is not None else None,
-                audio_s=capture.audio_s, output_path=str(out) if out else None,
-            ))
+            out = self._save_result(
+                text,
+                kind="mic",
+                lang=lang,
+                size=size,
+                device=device,
+                audio_s=capture.audio_s,
+            )
+            self.db.add(
+                storage.Entry(
+                    kind="mic",
+                    text=text,
+                    lang=lang,
+                    model_size=size or "auto",
+                    device=str(device) if device is not None else None,
+                    audio_s=capture.audio_s,
+                    output_path=str(out) if out else None,
+                )
+            )
             self._emit(MSG_RESULT, text)
             self._emit(MSG_DONE, f"Готово: {len(text)} симв.")
         except SystemExit as e:
@@ -298,14 +332,25 @@ class DictophoneApp:
                 path, lang=lang, size=size, model_dir=model_dir, output=None
             )
             out = self._save_result(
-                result.text, kind="file", lang=result.lang or lang, size=size,
-                device=None, audio_s=result.audio_s, source=path,
+                result.text,
+                kind="file",
+                lang=result.lang or lang,
+                size=size,
+                device=None,
+                audio_s=result.audio_s,
+                source=path,
             )
-            self.db.add(storage.Entry(
-                kind="file", text=result.text, lang=result.lang or lang,
-                source=str(path), model_size=size or "auto", audio_s=result.audio_s,
-                output_path=str(out) if out else None,
-            ))
+            self.db.add(
+                storage.Entry(
+                    kind="file",
+                    text=result.text,
+                    lang=result.lang or lang,
+                    source=str(path),
+                    model_size=size or "auto",
+                    audio_s=result.audio_s,
+                    output_path=str(out) if out else None,
+                )
+            )
             self._emit(MSG_RESULT, result.text)
             self._emit(MSG_DONE, f"Готово: {result.chars} симв., {result.audio_s:.1f} с")
         except SystemExit as e:
@@ -313,9 +358,17 @@ class DictophoneApp:
         except Exception as e:  # noqa: BLE001
             self._emit(MSG_ERROR, f"{type(e).__name__}: {e}")
 
-    def _save_result(self, text: str, *, kind: str, lang: str, size: Optional[str],
-                     device: Optional[int], audio_s: float,
-                     source: Optional[Path] = None) -> Optional[Path]:
+    def _save_result(
+        self,
+        text: str,
+        *,
+        kind: str,
+        lang: str,
+        size: Optional[str],
+        device: Optional[int],
+        audio_s: float,
+        source: Optional[Path] = None,
+    ) -> Optional[Path]:
         from datetime import datetime
 
         out_dir = Path(self.out_var.get() or models.DEFAULT_OUTPUT_DIR)
@@ -380,17 +433,25 @@ class HistoryWindow(tk.Toplevel):
         entry.pack(side="left", padx=6)
         entry.bind("<Return>", lambda _e: self._refresh())
         ttk.Button(top, text="Найти", command=self._refresh).pack(side="left")
-        ttk.Button(top, text="Показать все", command=self._show_all).pack(side="left", padx=6)
+        ttk.Button(top, text="Показать все", command=self._show_all).pack(
+            side="left", padx=6
+        )
 
         body = ttk.Frame(self, padding=8)
         body.pack(fill="both", expand=True)
         self.tree = ttk.Treeview(
-            body, columns=("id", "when", "kind", "lang", "dur", "preview"),
-            show="headings", selectmode="browse",
+            body,
+            columns=("id", "when", "kind", "lang", "dur", "preview"),
+            show="headings",
+            selectmode="browse",
         )
         for col, title, width in (
-            ("id", "ID", 50), ("when", "Когда", 140), ("kind", "Вид", 90),
-            ("lang", "Язык", 60), ("dur", "Длина", 70), ("preview", "Текст", 480),
+            ("id", "ID", 50),
+            ("when", "Когда", 140),
+            ("kind", "Вид", 90),
+            ("lang", "Язык", 60),
+            ("dur", "Длина", 70),
+            ("preview", "Текст", 480),
         ):
             self.tree.heading(col, text=title)
             self.tree.column(col, width=width, anchor="w")
@@ -399,7 +460,9 @@ class HistoryWindow(tk.Toplevel):
         self.tree.pack(side="left", fill="both", expand=True)
         vsb.pack(side="right", fill="y")
         self.tree.bind("<Double-1>", lambda _e: self._show_text())
-        ttk.Button(self, text="Показать полный текст", command=self._show_text).pack(pady=6)
+        ttk.Button(self, text="Показать полный текст", command=self._show_text).pack(
+            pady=6
+        )
         self._show_all()
 
     def _fill(self, rows) -> None:
@@ -408,9 +471,17 @@ class HistoryWindow(tk.Toplevel):
             kind = "микрофон" if r["kind"] == "mic" else "файл"
             preview = (r["text"] or "").replace("\n", " ")[:120]
             self.tree.insert(
-                "", "end", iid=str(r["id"]),
-                values=(r["id"], (r["created_at"] or "")[:16].replace("T", " "),
-                        kind, r["lang"] or "?", f"{r['audio_s'] or 0:.1f}s", preview),
+                "",
+                "end",
+                iid=str(r["id"]),
+                values=(
+                    r["id"],
+                    (r["created_at"] or "")[:16].replace("T", " "),
+                    kind,
+                    r["lang"] or "?",
+                    f"{r['audio_s'] or 0:.1f}s",
+                    preview,
+                ),
             )
 
     def _show_all(self) -> None:

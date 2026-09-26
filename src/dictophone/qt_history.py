@@ -33,28 +33,30 @@ class HistoryDialog(QtWidgets.QDialog):
         root.addLayout(tools)
 
         self.table = QtWidgets.QTableWidget(0, 6, self)
-        self.table.setHorizontalHeaderLabels([
-            self._t("history.id"),
-            self._t("history.when"),
-            self._t("history.kind"),
-            self._t("history.lang"),
-            self._t("history.duration"),
-            self._t("history.preview"),
-        ])
+        self.table.setHorizontalHeaderLabels(
+            [
+                self._t("history.id"),
+                self._t("history.when"),
+                self._t("history.kind"),
+                self._t("history.lang"),
+                self._t("history.duration"),
+                self._t("history.preview"),
+            ]
+        )
         self.table.setSelectionBehavior(
             QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows
         )
         self.table.setSelectionMode(
             QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
         )
-        self.table.setEditTriggers(
-            QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers
-        )
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(
             QtWidgets.QHeaderView.ResizeMode.ResizeToContents
         )
-        self.table.horizontalHeader().setSectionResizeMode(5, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(
+            5, QtWidgets.QHeaderView.ResizeMode.Stretch
+        )
         self.table.currentCellChanged.connect(self._show_selected)
         root.addWidget(self.table, 1)
 
@@ -69,16 +71,16 @@ class HistoryDialog(QtWidgets.QDialog):
         )
         self.copy_btn.clicked.connect(self._copy)
         self.delete_btn = buttons.addButton(
-            self._t("history.delete"), QtWidgets.QDialogButtonBox.ButtonRole.DestructiveRole
+            self._t("history.delete"),
+            QtWidgets.QDialogButtonBox.ButtonRole.DestructiveRole,
         )
         self.delete_btn.clicked.connect(self._delete)
         self.clear_btn = buttons.addButton(
-            self._t("history.clear"), QtWidgets.QDialogButtonBox.ButtonRole.DestructiveRole
+            self._t("history.clear"),
+            QtWidgets.QDialogButtonBox.ButtonRole.DestructiveRole,
         )
         self.clear_btn.clicked.connect(self._clear)
-        close_btn = buttons.addButton(
-            QtWidgets.QDialogButtonBox.StandardButton.Close
-        )
+        close_btn = buttons.addButton(QtWidgets.QDialogButtonBox.StandardButton.Close)
         close_btn.clicked.connect(self.reject)
         root.addWidget(buttons)
         self._show_all()
@@ -87,7 +89,11 @@ class HistoryDialog(QtWidgets.QDialog):
         self._rows = rows
         self.table.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
-            kind = self._t("history.kind_mic") if row.get("kind") == "mic" else self._t("history.kind_file")
+            kind = (
+                self._t("history.kind_mic")
+                if row.get("kind") == "mic"
+                else self._t("history.kind_file")
+            )
             preview = (row.get("text") or "").replace("\n", " ").strip()
             values = [
                 str(row.get("id", "")),
@@ -98,7 +104,9 @@ class HistoryDialog(QtWidgets.QDialog):
                 preview,
             ]
             for column, value in enumerate(values):
-                self.table.setItem(row_index, column, QtWidgets.QTableWidgetItem(str(value)))
+                self.table.setItem(
+                    row_index, column, QtWidgets.QTableWidgetItem(str(value))
+                )
         if rows:
             self.table.selectRow(0)
             self._show_selected(0, 0, -1, -1)
@@ -141,7 +149,8 @@ class HistoryDialog(QtWidgets.QDialog):
             self,
             self._t("history.delete"),
             self._t("history.confirm_delete", entry_id=entry["id"]),
-            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.Yes
+            | QtWidgets.QMessageBox.StandardButton.No,
             QtWidgets.QMessageBox.StandardButton.No,
         )
         if answer == QtWidgets.QMessageBox.StandardButton.Yes:
@@ -156,7 +165,8 @@ class HistoryDialog(QtWidgets.QDialog):
             self,
             self._t("history.clear"),
             self._t("history.confirm_clear", count=total),
-            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.Yes
+            | QtWidgets.QMessageBox.StandardButton.No,
             QtWidgets.QMessageBox.StandardButton.No,
         )
         if answer == QtWidgets.QMessageBox.StandardButton.Yes:

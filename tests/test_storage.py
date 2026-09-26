@@ -1,4 +1,5 @@
 """Тесты истории распознаваний (storage.py)."""
+
 from __future__ import annotations
 
 import pytest
@@ -13,7 +14,7 @@ def db(tmp_path):
 
 
 def _entry(**kw) -> storage.Entry:
-    base = dict(kind="mic", text="привет мир", lang="ru", audio_s=1.5)
+    base = {"kind": "mic", "text": "привет мир", "lang": "ru", "audio_s": 1.5}
     base.update(kw)
     return storage.Entry(**base)
 
@@ -24,8 +25,14 @@ class TestAddGet:
         assert db.add(_entry(text="второе")) == 2
 
     def test_get_roundtrip(self, db):
-        entry_id = db.add(_entry(source="C:/a.wav", output_path="C:/out.txt",
-                                 device="1", model_size="small"))
+        entry_id = db.add(
+            _entry(
+                source="C:/a.wav",
+                output_path="C:/out.txt",
+                device="1",
+                model_size="small",
+            )
+        )
         row = db.get(entry_id)
         assert row["text"] == "привет мир"
         assert row["source"] == "C:/a.wav"
@@ -155,7 +162,7 @@ class TestThreadSafety:
 
         th = threading.Thread(target=writer)
         th.start()
-        while not done.is_set():      # читаем параллельно с записью
+        while not done.is_set():  # читаем параллельно с записью
             store.list(limit=5)
         th.join()
         assert not errors, errors

@@ -5,6 +5,7 @@
 (ресурс exe, который читает PyInstaller). Расхождение ломает и релиз,
 и «О программе», поэтому фиксируем тестом.
 """
+
 from __future__ import annotations
 
 import re
@@ -22,7 +23,7 @@ VERSION_INFO = ROOT / "packaging" / "build" / "version_info.txt"
 def _pyproject_version() -> str:
     text = PYPROJECT.read_text(encoding="utf-8")
     match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
-    assert match, "в pyproject.toml нет version = \"...\""
+    assert match, 'в pyproject.toml нет version = "..."'
     return match.group(1)
 
 
@@ -35,7 +36,7 @@ class TestVersion:
 
     def test_pep440_compatible(self):
         """Имя пакета/версия идут в имя файла релиза и в тег Git."""
-        assert __version__.replace(".", "") .isalnum()
+        assert __version__.replace(".", "").isalnum()
 
     @pytest.mark.skipif(not VERSION_INFO.exists(), reason="нет version_info.txt")
     def test_version_info_resource_matches(self):

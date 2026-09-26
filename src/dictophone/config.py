@@ -6,6 +6,7 @@
 Приоритеты значений: встроенные значения < файл настроек < аргументы CLI.
 Модуль ничего не печатает и не обращается к сети — только чтение/запись JSON.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,7 @@ from typing import Any, Optional
 APP_NAME = "dictophone"
 CONFIG_ENV = "DICTOPHONE_CONFIG"
 SIZES = ("small", "large", "auto")
-UI_LANGS = ("auto",)          # плюс коды из i18n.available()
+UI_LANGS = ("auto",)  # плюс коды из i18n.available()
 
 
 class ConfigError(ValueError):
@@ -29,15 +30,15 @@ class Config:
     """Настройки приложения."""
 
     lang: str = "ru"
-    size: str = "small"                 # 'small' | 'large' | 'auto'
-    device: Optional[str] = None        # None -> устройство по умолчанию
-    output_dir: Optional[str] = None    # None -> <корень проекта>/out_text
-    model_dir: Optional[str] = None     # None -> <корень проекта>/models
-    postprocess: str = "heuristic"      # 'heuristic' | 'off'
-    db_path: Optional[str] = None       # None -> %APPDATA%/dictophone/history.db
-    history: bool = True                # писать ли распознавания в историю
-    ui_lang: str = "auto"               # 'auto' -> язык интерфейса по системе
-    first_run: bool = True              # показать ли выбор языка при запуске
+    size: str = "small"  # 'small' | 'large' | 'auto'
+    device: Optional[str] = None  # None -> устройство по умолчанию
+    output_dir: Optional[str] = None  # None -> <корень проекта>/out_text
+    model_dir: Optional[str] = None  # None -> <корень проекта>/models
+    postprocess: str = "heuristic"  # 'heuristic' | 'off'
+    db_path: Optional[str] = None  # None -> %APPDATA%/dictophone/history.db
+    history: bool = True  # писать ли распознавания в историю
+    ui_lang: str = "auto"  # 'auto' -> язык интерфейса по системе
+    first_run: bool = True  # показать ли выбор языка при запуске
     model_load_time: Optional[float] = None  # факт. время загрузки, с
     last_update_check: Optional[float] = None  # когда проверяли обновления, unixtime
 
@@ -86,8 +87,7 @@ def _coerce(name: str, value: Any) -> Any:
         allowed = ("auto", *available())
         if value not in allowed:
             raise ConfigError(
-                f"Неверное значение ui_lang={value!r}. "
-                f"Допустимо: {', '.join(allowed)}"
+                f"Неверное значение ui_lang={value!r}. Допустимо: {', '.join(allowed)}"
             )
         return value
     if name == "postprocess":
@@ -161,8 +161,7 @@ def save_config(cfg: Config, path: Optional[Path] = None) -> Path:
     cfg_path = Path(path) if path is not None else default_config_path()
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        k: v for k, v in cfg.to_dict().items()
-        if v is not None or k in ALWAYS_WRITE
+        k: v for k, v in cfg.to_dict().items() if v is not None or k in ALWAYS_WRITE
     }
     cfg_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",

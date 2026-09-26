@@ -1,4 +1,5 @@
 """Иконка приложения: рисуется кодом, собирается в ICO (app_icon.py)."""
+
 from __future__ import annotations
 
 import struct
@@ -7,7 +8,7 @@ import pytest
 
 pytest.importorskip("PySide6", reason="PySide6 не установлен — GUI-тесты пропущены")
 
-from dictophone import app_icon  # noqa: E402
+from dictophone import app_icon
 
 
 @pytest.fixture(scope="module")
@@ -106,9 +107,9 @@ class TestIco:
         data = app_icon.ico_bytes((16, 48))
         count = struct.unpack("<H", data[4:6])[0]
         for i in range(count):
-            entry = struct.unpack("<BBBBHHII", data[6 + 16 * i:22 + 16 * i])
+            entry = struct.unpack("<BBBBHHII", data[6 + 16 * i : 22 + 16 * i])
             offset, size = entry[7], entry[6]
-            assert data[offset:offset + 4] == b"\x89PNG", "ожидается PNG внутри ICO"
+            assert data[offset : offset + 4] == b"\x89PNG", "ожидается PNG внутри ICO"
 
     def test_ico_256_uses_zero_size_field(self):
         """В ICO размер 256 кодируется нулём в байтовых полях."""

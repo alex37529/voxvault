@@ -13,6 +13,7 @@
     from dictophone.transcribe import transcribe
     text = transcribe(Path("audio.wav"), lang="ru", size="small")
 """
+
 from __future__ import annotations
 
 __version__ = "0.1.1"

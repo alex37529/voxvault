@@ -11,6 +11,7 @@
 
 Модели НЕ вшиваются: приложение само скачивает их при первом запуске.
 """
+
 from __future__ import annotations
 
 import sys
@@ -35,7 +36,7 @@ def _console_usable() -> bool:
         return False
     try:
         return bool(stream.fileno())
-    except Exception:
+    except Exception:  # noqa: BLE001 - поток без fileno (подмена в тестах)
         return False
 
 
@@ -63,8 +64,8 @@ def _attach_parent_console() -> None:
         for name in ("stdout", "stderr"):
             stream = open("CONOUT$", "w", encoding="utf-8", buffering=1)
             setattr(sys, name, stream)
-    except Exception:
-        pass  # без консоли живём: вывод, может, и некуда
+    except Exception:  # noqa: BLE001 - без консоли живём: вывод, может, и некуда
+        pass
 
 
 def _selftest() -> int:
@@ -77,8 +78,7 @@ def _selftest() -> int:
     """
     import traceback
 
-    from dictophone import __version__
-    from dictophone import i18n, models
+    from dictophone import __version__, i18n, models
     from dictophone.single_instance import SingleInstance
 
     checks: list[tuple[str, bool, str]] = []
@@ -87,7 +87,7 @@ def _selftest() -> int:
         try:
             detail = func()
             checks.append((name, True, str(detail)))
-        except Exception as e:            # noqa: BLE001 - здесь любая ошибка informative
+        except Exception as e:  # noqa: BLE001 - здесь любая ошибка informative
             checks.append((name, False, f"{type(e).__name__}: {e}"))
 
     print(f"VoxVault {__version__}")
