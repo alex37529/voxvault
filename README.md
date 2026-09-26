@@ -275,10 +275,15 @@ dictophone download --lang ru --size large    # ~1.8 GB, more accurate
 - Downloads go to a temporary `.part` file with three attempts: a broken file
   never remains under the final name, the archive is verified, and after
   unpacking the required files are checked (`am/final.mdl`, `conf/mfcc.conf`,
-  `conf/model.conf`, `graph/Gr.fst`, `graph/HCLr.fst`,
-  `graph/phones/word_boundary.int`). An incomplete model is deleted.
-  Note: `graph/words.txt` is **absent** from the official VOSK archives and must
-  not be required — otherwise a perfectly good model gets deleted as incomplete.
+  `conf/model.conf`, `graph/phones/word_boundary.int`) plus at least one
+  decoding graph `graph/*.fst`. An incomplete model is deleted.
+  Two traps here, both learned the hard way:
+  - the graph file is **not** named the same everywhere — older models ship
+    `Gr.fst` + `HCLr.fst`, newer ones (`ru-0.42`, `en-us-0.22`, `de-0.21`,
+    `uk-v3`, `cn`, `ja`, `el-gr`) ship a single `HCLG.fst`. Requiring
+    `Gr.fst` deletes a perfectly good 1.8 GB model as "incomplete";
+  - `graph/words.txt` is **absent** from some official VOSK archives and must
+    not be required either.
 
 ### Recognition languages (33)
 

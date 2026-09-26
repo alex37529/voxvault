@@ -338,8 +338,9 @@ def _extract_verified(zip_path: Path, model_dir: Path, archive_name: str) -> Non
     if missing:
         shutil.rmtree(model, ignore_errors=True)
         raise SystemExit(
-            "Модель распаковалась не полностью, недостают файлы: "
+            "Модель распаковалась не полностью, недостают: "
             + ", ".join(missing)
+            + " (graph/*.fst — любой файл графа декодирования)"
         )
 
 
@@ -357,20 +358,41 @@ def installed_langs(model_dir: Path = DEFAULT_MODEL_DIR) -> list[str]:
     return found
 
 
-#: Файлы, без которых модель VOSK нерабочая (проверка после распаковки).
+#: Файлы, без которых модель VOSK точно нерабочая.
+#:
+#: Список НЕ привязан к конкретной модели. Имена файлов графа у моделей
+#: разные: у старых (small-ru-0.22, small-uk-v3-nano) это `Gr.fst` +
+#: `HCLr.fst`, у новых (ru-0.42, en-us-0.22, de-0.21, uk-v3, cn, ja, …) —
+#: `HCLG.fst`. Раньше проверка требовала именно `Gr.fst` и `HCLr.fst`,
+#: поэтому нормальная большая модель ru объявлялась битой: архив на 1,8 ГБ
+#: скачивался и распаковывался, проверка его удаляла, и пользователь
+#: оставался без модели. Обязательна лишь акустическая модель, конфиги и
+#: граница слов; сам граф проверяется по REQUIRED_MODEL_GLOBS.
 REQUIRED_MODEL_FILES = (
     "am/final.mdl",
     "conf/mfcc.conf",
     "conf/model.conf",
-    "graph/Gr.fst",
-    "graph/HCLr.fst",
     "graph/phones/word_boundary.int",
 )
 
+#: Шаблоны, где достаточно любого подходящего файла (имя не фиксировано).
+REQUIRED_MODEL_GLOBS = ("graph/*.fst",)
+
 
 def validate_model_dir(path: Path) -> list[str]:
-    """Проверить распакованную модель. Вернуть список недостающих файлов."""
-    return [rel for rel in REQUIRED_MODEL_FILES if not (path / rel).exists()]
+    """Проверить распакованную модель. Вернуть список недостающего.
+
+    Нужна, чтобы поймать битый архив и недокачанный файл: приложение должно
+    сказать об этом сразу, а не падать позже при загрузке модели в память.
+    """
+    path = Path(path)
+    missing = [rel for rel in REQUIRED_MODEL_FILES if not (path / rel).exists()]
+    missing += [
+        pattern
+        for pattern in REQUIRED_MODEL_GLOBS
+        if not any(path.glob(pattern))
+    ]
+    return missing
 
 
 def dir_size_mb(path: Path) -> int:

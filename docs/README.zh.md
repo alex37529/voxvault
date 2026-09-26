@@ -255,10 +255,14 @@ dictophone download --lang ru --size large    # 约 1.8 GB，更准确
 - 也可以从官方页面手动下载模型，解压到 `models/` 即可。
 - 下载先写入临时 `.part` 文件，最多尝试三次：损坏的文件不会留在最终名字下，
   压缩包会做完整性校验，解压后还会检查必需文件（`am/final.mdl`、
-  `conf/mfcc.conf`、`conf/model.conf`、`graph/Gr.fst`、`graph/HCLr.fst`、
-  `graph/phones/word_boundary.int`）。不完整的模型会被删除。
-  请注意：官方 VOSK 压缩包中**没有** `graph/words.txt`，不能把它当作必需文件，
-  否则完全正常的模型会被误判为不完整而删除。
+  `conf/mfcc.conf`、`conf/model.conf`、`graph/phones/word_boundary.int`）
+  以及至少一个解码图文件 `graph/*.fst`。不完整的模型会被删除。
+  这里有两个坑，都曾导致 1.8 GB 白下：
+  - 图文件的**名字并不统一**：旧模型是 `Gr.fst` + `HCLr.fst`，新模型
+  （`ru-0.42`、`en-us-0.22`、`de-0.21`、`uk-v3`、`cn`、`ja`、`el-gr`）
+  只有一个 `HCLG.fst`。如果硬性要求 `Gr.fst`，正常的模型会被当成
+  “不完整”而删除；
+  - 官方 VOSK 压缩包中也**没有** `graph/words.txt`，同样不能当作必需文件。
 
 ### 支持识别的语言（33 种）
 
