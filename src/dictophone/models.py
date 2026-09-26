@@ -465,24 +465,53 @@ def free_space_mb(path: Path) -> int:
 def list_installed(model_dir: Path = DEFAULT_MODEL_DIR) -> list[dict]:
     """Что установлено: по записи на язык.
 
-    Каждая запись: lang, small/large (имя каталога или None), path,
-    size_mb. Используется вкладкой «Модели» в настройках.
+    Каждая запись: lang, small/large (имя каталога или None), path
+    (последняя найденная модель — для совместимости), sizes_mb
+    (размер каждого размера по отдельности) и size_mb — СУММА размеров.
+
+    Раньше size_mb перезаписывался каждой найденной моделью, и в списке для
+    `ru` со small+large показывалось 3524 МБ — то есть размер только
+    большой. Теперь видно, сколько места занимает язык целиком, а по
+    размерам — сколько какая модель.
     """
     model_dir = Path(model_dir)
     rows: list[dict] = []
     for lang in sorted(MODELS):
-        entry: dict[str, Any] = {"lang": lang, "path": None, "size_mb": 0}
-        for size in ("small", "large"):
+        entry: dict[str, Any] = {
+            "lang": lang,
+            "path": None,
+            "size_mb": 0,
+            "sizes_mb": dict.fromkeys(SIZES, 0),
+        }
+        for size in SIZES:
             name = MODELS[lang].get(size)
             found = (model_dir / name) if name else None
             if found is not None and _is_model_dir(found):
                 entry[size] = name
                 entry["path"] = found
-                entry["size_mb"] = dir_size_mb(found)
+                entry["sizes_mb"][size] = dir_size_mb(found)
+                entry["size_mb"] += entry["sizes_mb"][size]
             else:
                 entry[size] = None
         rows.append(entry)
     return rows
+
+
+def is_installed(model_dir: Path, lang: str, size: str) -> bool:
+    """Установлена ли модель языка и размера (точная проверка, не «любая»)."""
+    name = MODELS.get((lang or "").lower(), {}).get(size)
+    if not name:
+        return False
+    return _is_model_dir(Path(model_dir) / name)
+
+
+def installed_size_mb(model_dir: Path, lang: str, size: str) -> int:
+    """Размер установленной модели по языку и размеру (0, если её нет)."""
+    name = MODELS.get(lang, {}).get(size)
+    if not name:
+        return 0
+    found = Path(model_dir) / name
+    return dir_size_mb(found) if _is_model_dir(found) else 0
 
 
 def delete_model(path: Path) -> int:

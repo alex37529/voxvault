@@ -544,7 +544,13 @@ class TestRegistrySizesInUi:
 
 
 class TestModelsTabHonesty:
-    """Вкладка «Модели»: кнопка есть только там, где есть что качать."""
+    """Вкладка «Модели»: у каждой модели свой блок со своими кнопками.
+
+    Регресс: на язык приходились одна кнопка «Скачать», одна «Удалить» и
+    один «Прогреть» — при двух установленных моделях (`ru` small+large)
+    было непонятно, к какой относится действие, а удалялась та модель, чей
+    каталог последним попал в кэш.
+    """
 
     def _dlg(self, app, widget, tmp_path):
         cfg = config_mod.Config(model_dir=str(tmp_path), ui_lang="ru")
@@ -552,58 +558,165 @@ class TestModelsTabHonesty:
 
     @staticmethod
     def _row_of(dlg, lang: str) -> int:
+        """Номер строки по коду языка (первый токен, а не подстрока)."""
         for row in range(dlg.models_list.count()):
-            if lang in dlg.models_list.item(row).text():
+            text = dlg.models_list.item(row).text().replace("✓", "")
+            if text.split()[0] == lang:
                 return row
         raise AssertionError(f"языка {lang} нет в списке")
 
     @staticmethod
-    def _install(tmp_path, lang: str, size: str) -> None:
+    def _install(tmp_path, lang: str, size: str, size_mb: int = 0) -> Path:
         name = models.MODELS[lang][size]
-        (tmp_path / name / "am").mkdir(parents=True, exist_ok=True)
-        (tmp_path / name / "am" / "final.mdl").write_bytes(b"x")
+        target = tmp_path / name
+        (target / "am").mkdir(parents=True, exist_ok=True)
+        (target / "am" / "final.mdl").write_bytes(b"x" * 1024)
+        if size_mb:  # директория нужного размера, чтобы цифры были заметны
+            filler = target / "filler.bin"
+            filler.write_bytes(b"\0" * (size_mb * 1024 * 1024))
+        return target
 
-    def test_button_hidden_for_size_absent_in_registry(self, app, widget, tmp_path):
+    def _pick(self, dlg, lang: str):
+        dlg.models_list.setCurrentRow(self._row_of(dlg, lang))
+        return dlg._model_boxes
+
+    def test_block_hidden_for_size_absent_in_registry(self, app, widget, tmp_path):
         dlg = self._dlg(app, widget, tmp_path)
         try:
-            dlg.models_list.setCurrentRow(self._row_of(dlg, "ar"))
-            # у ar нет small -> кнопки быть не должно вовсе
-            assert dlg.btn_dl_small.isHidden() is True
-            assert dlg.btn_dl_large.isHidden() is False
-            # и в подписи это сказано словами
+            boxes = self._pick(dlg, "ar")
+            assert boxes["small"]["box"].isHidden() is True  # у ar нет small
+            assert boxes["large"]["box"].isHidden() is False
             assert I18n("ru").t("models.not_in_registry") in dlg.model_info.text()
         finally:
             dlg.close()
 
-    def test_button_label_shows_archive_name(self, app, widget, tmp_path):
+    def test_each_model_has_its_own_actions(self, app, widget, tmp_path):
         dlg = self._dlg(app, widget, tmp_path)
         try:
-            dlg.models_list.setCurrentRow(self._row_of(dlg, "cn"))
-            text = dlg.btn_dl_large.text()
-            assert models.MODELS["cn"]["large"] in text, text
-            assert dlg.btn_dl_large.isEnabled() is True
-            dlg.models_list.setCurrentRow(self._row_of(dlg, "ca"))
-            assert dlg.btn_dl_large.isHidden() is True
-            assert models.MODELS["ca"]["small"] in dlg.btn_dl_small.text()
+            boxes = self._pick(dlg, "cn")
+            # ни одна модель не установлена -> только «Скачать» в каждом блоке
+            for size in ("small", "large"):
+                assert boxes[size]["download"].isHidden() is False
+                assert boxes[size]["delete"].isHidden() is True
+                assert models.MODELS["cn"][size] in boxes[size]["title"].text()
         finally:
             dlg.close()
 
-    def test_installed_model_is_not_offered_for_download(self, app, widget, tmp_path):
+    def test_installed_model_offers_only_delete(self, app, widget, tmp_path):
         self._install(tmp_path, "ru", "small")
         dlg = self._dlg(app, widget, tmp_path)
         try:
-            dlg.models_list.setCurrentRow(self._row_of(dlg, "ru"))
-            assert dlg.btn_dl_small.isEnabled() is False
-            assert models.MODELS["ru"]["small"] in dlg.btn_dl_small.text()
+            boxes = self._pick(dlg, "ru")
+            assert boxes["small"]["download"].isHidden() is True
+            assert boxes["small"]["delete"].isHidden() is False
+            # большая ещё не стоит — у неё наоборот
+            assert boxes["large"]["download"].isHidden() is False
+            assert boxes["large"]["delete"].isHidden() is True
         finally:
             dlg.close()
+
+    def test_both_models_installed_have_separate_blocks(self, app, widget, tmp_path):
+        self._install(tmp_path, "ru", "small")
+        self._install(tmp_path, "ru", "large")
+        dlg = self._dlg(app, widget, tmp_path)
+        try:
+            boxes = self._pick(dlg, "ru")
+            for size in ("small", "large"):
+                assert boxes[size]["delete"].isHidden() is False
+                assert boxes[size]["download"].isHidden() is True
+            # у каждой модели своя кнопка удаления
+            assert boxes["small"]["delete"] is not boxes["large"]["delete"]
+        finally:
+            dlg.close()
+
+    def test_delete_removes_exact_size(self, app, widget, tmp_path, monkeypatch):
+        """Кнопка «Удалить» в блоке удаляет именно свою модель."""
+        self._install(tmp_path, "ru", "small")
+        self._install(tmp_path, "ru", "large")
+        dlg = self._dlg(app, widget, tmp_path)
+        monkeypatch.setattr(
+            QtWidgets.QMessageBox,
+            "question",
+            lambda *a, **k: QtWidgets.QMessageBox.StandardButton.Yes,
+        )
+        try:
+            self._pick(dlg, "ru")
+            dlg._model_boxes["small"]["delete"].click()
+            assert not (tmp_path / models.MODELS["ru"]["small"]).exists()
+            assert (tmp_path / models.MODELS["ru"]["large"]).exists()
+        finally:
+            dlg.close()
+
+    def test_delete_confirmation_names_the_model(
+        self, app, widget, tmp_path, monkeypatch
+    ):
+        self._install(tmp_path, "ru", "small")
+        dlg = self._dlg(app, widget, tmp_path)
+        asked = []
+        monkeypatch.setattr(
+            QtWidgets.QMessageBox,
+            "question",
+            lambda parent, title, text, *a, **k: (
+                asked.append(text) or QtWidgets.QMessageBox.StandardButton.No
+            ),
+        )
+        try:
+            self._pick(dlg, "ru")
+            dlg._model_boxes["small"]["delete"].click()
+            assert asked, "подтверждение не показано"
+            assert models.MODELS["ru"]["small"] in asked[0]
+        finally:
+            dlg.close()
+
+    def test_size_shown_per_model_not_shared_total(self, app, widget, tmp_path):
+        self._install(tmp_path, "ru", "small", size_mb=5)
+        self._install(tmp_path, "ru", "large", size_mb=7)
+        dlg = self._dlg(app, widget, tmp_path)
+        try:
+            boxes = self._pick(dlg, "ru")
+            small_state = boxes["small"]["state"].text()
+            large_state = boxes["large"]["state"].text()
+            assert "5" in small_state, small_state
+            assert "7" in large_state, large_state
+            # и в списке — сумма обоих размеров, а не размер одного
+            row = dlg.models_list.item(self._row_of(dlg, "ru")).text()
+            assert "12" in row, row
+        finally:
+            dlg.close()
+
+    def test_warm_button_says_which_model(self, app, tmp_path, monkeypatch):
+        """«Прогреть» всегда называет модель из главного окна."""
+        self._install(tmp_path, "ru", "small")
+        win = gui_qt.MainWindow(
+            config_mod.Config(
+                first_run=False,
+                ui_lang="ru",
+                lang="ru",
+                size="small",
+                model_dir=str(tmp_path),
+            )
+        )
+        try:
+            dlg = qt_settings.SettingsDialog(win.cfg, I18n("ru").t, win)
+            assert dlg.btn_warm.text().endswith("ru/small")
+            assert dlg.btn_warm.isEnabled() is True
+            # гасится, если выбранной модели на диске нет
+            index = win.size_box.findData("large")
+            win.size_box.setCurrentIndex(index)
+            dlg._refresh_warm_button()
+            assert dlg.btn_warm.text().endswith("ru/large")
+            assert dlg.btn_warm.isEnabled() is False
+            dlg.close()
+        finally:
+            win._model = None
+            win.close()
 
     def test_large_warning_only_when_large_exists(self, app, widget, tmp_path):
         dlg = self._dlg(app, widget, tmp_path)
         try:
-            dlg.models_list.setCurrentRow(self._row_of(dlg, "ru"))
+            self._pick(dlg, "ru")
             assert dlg.model_warn.isHidden() is False  # large есть, не стоит
-            dlg.models_list.setCurrentRow(self._row_of(dlg, "ca"))
+            self._pick(dlg, "ca")
             # у ca большой модели не существует — предупреждать не о чем
             assert dlg.model_warn.isHidden() is True
         finally:
